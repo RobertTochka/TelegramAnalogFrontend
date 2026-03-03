@@ -16,10 +16,10 @@ export default function middleware(request: NextRequest) {
   }
 
   if (!session) {
-    return NextResponse.redirect(new URL('/auth/login', url))
+    return NextResponse.redirect(new URL('/auth', url))
   }
 }
 
 export const config = {
-  matcher: ['/auth/:path*', '/:path*']
+  matcher: ['/auth', '/', '/chats']
 }

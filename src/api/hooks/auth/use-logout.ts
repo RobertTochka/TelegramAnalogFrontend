@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useRouter } from 'next/router'
+import { useRouter } from 'next/navigation'
 import { useMemo } from 'react'
 import toast from 'react-hot-toast'
 
@@ -9,7 +9,7 @@ export const useLogout = () => {
   const router = useRouter()
   const queryClient = useQueryClient()
 
-  const { mutate: logoutUser, isPending: isLoadingLogout } = useMutation({
+  const { mutate: logout, isPending: isLoadingLogout } = useMutation({
     mutationKey: ['logout'],
     mutationFn: () => api.post('/auth/logout').then(res => res.data),
     onSuccess: () => {
@@ -23,9 +23,9 @@ export const useLogout = () => {
 
   return useMemo(
     () => ({
-      logoutUser,
+      logout,
       isLoadingLogout
     }),
-    [logoutUser, isLoadingLogout]
+    [logout, isLoadingLogout]
   )
 }
