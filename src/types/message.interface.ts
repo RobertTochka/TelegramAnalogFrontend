@@ -31,8 +31,8 @@ export interface MessageDto {
   id: string
   content: string
   createdAt: string
-  senderId: string
-  sender: MessageSenderDto
+  senderId?: string
+  sender?: MessageSenderDto
 }
 
 export interface MessageSenderDto {
@@ -42,10 +42,29 @@ export interface MessageSenderDto {
   avatar: string
 }
 
+export interface TypingEvent {
+  chatId: string
+  userId: string
+  isTyping: boolean
+}
+
+export interface MessageStatusEvent {
+  messageId: string
+  status: EnumMessageStatus
+  userId: string
+}
+
+export interface ReadReceiptEvent {
+  chatId: string
+  userId: string
+  messageIds?: string[]
+  readAt: string
+}
+
 export enum EnumMessageStatus {
-  SENT,
-  DELIVERED,
-  READ,
-  FAILED,
-  DELETED
+  SENT = 'SENT',
+  DELIVERED = 'DELIVERED',
+  READ = 'READ',
+  FAILED = 'FAILED',
+  DELETED = 'DELETED'
 }

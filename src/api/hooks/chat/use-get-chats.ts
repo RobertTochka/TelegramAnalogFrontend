@@ -3,7 +3,12 @@ import { useCallback, useMemo } from 'react'
 
 import { api } from '@/api/api'
 
-import { Chat, ChatFilter, PaginatedResponse } from '@/types'
+import {
+  Chat,
+  ChatFilter,
+  EnumParticipantRole,
+  PaginatedResponse
+} from '@/types'
 
 export const useGetChats = (filters: ChatFilter = {}) => {
   const queryClient = useQueryClient()
@@ -70,6 +75,60 @@ export const useGetChats = (filters: ChatFilter = {}) => {
           }))
         }
       })
+    },
+    [queryClient, filters]
+  )
+
+  const updateChatParticipantsInChache = useCallback(
+    (chatId: string, userId: string, isDelete: boolean) => {
+      const currentData = queryClient.getQueryData(['chats', 'list', filters])
+
+      if (currentData) {
+        // Находим нужный чат и обновляем его participants
+        queryClient.setQueryData(['chats', 'list', filters], (oldData: any) => {
+          if (!oldData) return oldData
+
+          return {
+            ...oldData,
+            pages: oldData.pages.map((page: PaginatedResponse<Chat[]>) => ({
+              ...page,
+              data: page.data.map(chat => {
+                if (chat.id === chatId) {
+                  if (isDelete) {
+                    return {
+                      ...chat,
+                      participants: (chat.participants || []).filter(
+                        p => p.id !== userId
+                      )
+                    }
+                  } else {
+                    const existingParticipant = chat.participants?.find(
+                      p => p.id === userId
+                    )
+
+                    if (existingParticipant) {
+                      return chat
+                    }
+
+                    return {
+                      ...chat,
+                      participants: [
+                        ...(chat.participants || []),
+                        {
+                          id: userId,
+                          joinedAt: new Date().toISOString(),
+                          role: EnumParticipantRole.MEMBER
+                        }
+                      ]
+                    }
+                  }
+                }
+                return chat
+              })
+            }))
+          }
+        })
+      }
     },
     [queryClient, filters]
   )
@@ -141,6 +200,7 @@ export const useGetChats = (filters: ChatFilter = {}) => {
       currentPage: data?.pages[data.pages.length - 1]?.meta.page ?? 1,
       isEmpty: chats.length === 0,
       updateChatInCache,
+      updateChatParticipantsInChache,
       removeChatFromCache,
       addChatToCache
     }),
@@ -155,6 +215,7 @@ export const useGetChats = (filters: ChatFilter = {}) => {
       isFetching,
       data?.pages,
       updateChatInCache,
+      updateChatParticipantsInChache,
       removeChatFromCache,
       addChatToCache
     ]

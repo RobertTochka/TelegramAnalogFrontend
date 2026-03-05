@@ -1,4 +1,5 @@
 import { MessageDto } from './message.interface'
+import { EnumUserStatus } from './user.interface'
 
 export interface Chat {
   id: string
@@ -29,6 +30,8 @@ export interface ChatParticipant {
   lastName: string
   avatar: string
   role: EnumParticipantRole
+  status: EnumUserStatus
+  lastSeen: string
   joinedAt: string
   lastReadAt?: string
 }
@@ -59,9 +62,9 @@ export enum EnumChatType {
 }
 
 export enum EnumParticipantRole {
-  OWNER,
-  ADMIN,
-  MEMBER
+  OWNER = 'OWNER',
+  ADMIN = 'ADMIN',
+  MEMBER = 'MEMBER'
 }
 
 export interface PaginatedResponse<T> {

@@ -47,16 +47,16 @@ export interface FriendRequestsDto {
 }
 
 export enum EnumUserStatus {
-  ONLINE,
-  OFFLINE
+  ONLINE = 'ONLINE',
+  OFFLINE = 'OFFLINE'
 }
 
 export enum EnumUserRole {
-  ADMIN,
-  USER
+  ADMIN = 'ADMIN',
+  USER = 'USER'
 }
 
 export enum EnumUserVisibility {
-  VISIBLE,
-  INVISIBLE
+  VISIBLE = 'VISIBLE',
+  INVISIBLE = 'INVISIBLE'
 }

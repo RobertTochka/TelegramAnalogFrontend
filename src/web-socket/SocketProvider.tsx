@@ -10,7 +10,7 @@ import {
 } from 'react'
 import { io, Socket } from 'socket.io-client'
 
-import { APP_URL } from '@/constants'
+import { SERVER_URL } from '@/constants'
 
 interface SocketContextType {
   socket: Socket | null
@@ -24,7 +24,7 @@ const SocketContext = createContext<SocketContextType>({
 
 export const useSocket = () => useContext(SocketContext)
 
-const SOCKET_URL = APP_URL
+const SOCKET_URL = `${SERVER_URL}/messages`
 
 export const SocketProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [socket, setSocket] = useState<Socket | null>(null)
