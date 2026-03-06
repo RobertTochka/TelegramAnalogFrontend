@@ -11,13 +11,15 @@ interface ChatListItemProps {
   selectedChatId: string
   currentUserId: string
   onSelectChat?: (chatId: string) => void
+  markChatAsRead?: (chatId: string) => void
 }
 
 export const ChatListItem = ({
   chat,
   selectedChatId,
   currentUserId,
-  onSelectChat
+  onSelectChat,
+  markChatAsRead
 }: ChatListItemProps) => {
   const getChatName = () => {
     if (chat.type === EnumChatType.DIRECT) {
@@ -43,7 +45,8 @@ export const ChatListItem = ({
     return otherParticipant?.avatar
   }
 
-  const formatLastMessage = (msg: string) => {
+  const formatLastMessage = (msg?: string) => {
+    if (!msg) return undefined
     if (msg.length > 30) return msg.substring(0, 27) + '...'
     return msg
   }
@@ -80,12 +83,12 @@ export const ChatListItem = ({
   }
 
   const handleSelectChat = (chatId: string) => {
+    markChatAsRead?.(chatId)
     onSelectChat?.(chatId)
   }
 
   return (
     <button
-      key={chat.id}
       onClick={() => handleSelectChat(chat.id)}
       className={`relative w-full overflow-hidden transition-all duration-200 before:absolute before:inset-0 before:bg-linear-to-r before:from-purple-600/0 before:to-blue-600/0 before:opacity-0 before:transition-opacity hover:before:opacity-10 ${
         selectedChatId === chat.id

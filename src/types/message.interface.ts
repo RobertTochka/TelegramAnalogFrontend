@@ -2,7 +2,7 @@ export interface Message {
   id: string
   chatId: string
   sender?: MessageSenderDto
-  content: string
+  content?: string
   isSystem: boolean
   replyTo?: Message
   forwardedFrom?: Message
@@ -15,7 +15,7 @@ export interface MessageFilter {
   chatId?: string
   senderId?: string
   fromDate?: string
-  page?: number
+  cursor?: string
   limit?: number
   search?: string
 }
@@ -25,14 +25,6 @@ export interface CreateMessageDto {
   content?: string
   replyToId?: string
   forwardedFromId?: string
-}
-
-export interface MessageDto {
-  id: string
-  content: string
-  createdAt: string
-  senderId?: string
-  sender?: MessageSenderDto
 }
 
 export interface MessageSenderDto {

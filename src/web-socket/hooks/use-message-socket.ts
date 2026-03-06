@@ -8,16 +8,21 @@ import { useGetMessages } from '@/api/hooks/messages'
 import { useSocket } from '../SocketProvider'
 
 import {
+  ChatFilter,
   ChatParticipant,
   CreateMessageDto,
   EnumMessageStatus,
   Message,
+  MessageFilter,
+  MessageSenderDto,
   MessageStatusEvent,
   ReadReceiptEvent,
   TypingEvent
 } from '@/types'
 
 interface UseMessageSocketProps {
+  messagesQuery: Omit<MessageFilter, 'page'>
+  chatsQuery: ChatFilter
   chatId: string
   onNewMessage?: (message: Message) => void
   onMessageUpdated?: (message: Message) => void
@@ -32,6 +37,8 @@ interface UseMessageSocketProps {
 }
 
 export const useMessageSocket = ({
+  messagesQuery,
+  chatsQuery,
   chatId,
   onNewMessage,
   onMessageUpdated,
@@ -42,23 +49,50 @@ export const useMessageSocket = ({
 }: UseMessageSocketProps) => {
   const { socket, isConnected } = useSocket()
   const queryClient = useQueryClient()
-  const { addMessageToCache, updateMessageInCache, removeMessageFromCache } =
-    useGetMessages(chatId, {})
-  const { updateChatInCache } = useGetChats({})
+  const {
+    addMessageToCache,
+    updateMessageInCache,
+    removeMessageFromCache,
+    replaceTempMessage
+  } = useGetMessages(chatId, messagesQuery)
+  const { updateChatInCache } = useGetChats(chatsQuery)
 
   // Таймауты для печатания
   const typingTimeouts = useRef<Map<string, NodeJS.Timeout>>(new Map())
 
   // Отправка сообщения
   const sendMessage = useCallback(
-    (data: CreateMessageDto) => {
+    (
+      data: CreateMessageDto,
+      sender: MessageSenderDto,
+      replyTo?: Message,
+      forwardedFrom?: Message
+    ) => {
       if (!socket || !isConnected) {
         toast.error('Нет подключения к серверу')
         return
       }
 
+      const tempId = crypto.randomUUID()
+
+      const optimisticMessage: Message = {
+        id: tempId,
+        chatId: data.chatId,
+        sender,
+        content: data.content,
+        isSystem: false,
+        replyTo: replyTo,
+        forwardedFrom: forwardedFrom,
+        statuses: { [sender.id]: EnumMessageStatus.SENT },
+        createdAt: new Date().toString(),
+        isEdited: false
+      }
+
+      addMessageToCache(optimisticMessage)
+
       socket.emit('message:send', {
-        ...data
+        ...data,
+        tempId
       })
     },
     [socket, isConnected, chatId]
@@ -157,13 +191,15 @@ export const useMessageSocket = ({
 
     // Обработчик нового сообщения
     const handleNewMessage = (data: { message: Message; tempId?: string }) => {
-      addMessageToCache(data.message)
+      if (data.tempId) {
+        replaceTempMessage(data.tempId, data.message)
+      } else {
+        addMessageToCache(data.message)
+      }
 
       updateChatInCache(chatId, {
         lastMessage: data.message
       })
-
-      queryClient.invalidateQueries({ queryKey: ['messages', 'unread'] })
 
       onNewMessage?.(data.message)
     }

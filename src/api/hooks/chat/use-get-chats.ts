@@ -10,7 +10,8 @@ import {
   PaginatedResponse
 } from '@/types'
 
-export const useGetChats = (filters: ChatFilter = {}) => {
+export const useGetChats = (filters: Omit<ChatFilter, 'cursor'>) => {
+  const queryKey = ['chats', 'list', JSON.stringify(filters)]
   const queryClient = useQueryClient()
 
   const {
@@ -23,8 +24,8 @@ export const useGetChats = (filters: ChatFilter = {}) => {
     refetch,
     isFetching
   } = useInfiniteQuery({
-    queryKey: ['chats', 'list', filters],
-    queryFn: async ({ pageParam = 1 }) => {
+    queryKey,
+    queryFn: async ({ pageParam = null }: { pageParam: string | null }) => {
       const params = new URLSearchParams()
 
       Object.entries(filters).forEach(([key, value]) => {
@@ -33,7 +34,9 @@ export const useGetChats = (filters: ChatFilter = {}) => {
         }
       })
 
-      params.set('page', String(pageParam))
+      if (pageParam) {
+        params.set('cursor', pageParam)
+      }
 
       const { data } = await api.get<PaginatedResponse<Chat[]>>(
         `/chats?${params.toString()}`
@@ -42,14 +45,9 @@ export const useGetChats = (filters: ChatFilter = {}) => {
       return data
     },
     getNextPageParam: lastPage => {
-      return lastPage.meta.hasNextPage ? lastPage.meta.page + 1 : undefined
+      return lastPage.meta.nextCursor
     },
-    getPreviousPageParam: firstPage => {
-      return firstPage.meta.hasPreviousPage
-        ? firstPage.meta.page - 1
-        : undefined
-    },
-    initialPageParam: 1,
+    initialPageParam: null,
     staleTime: 1000 * 60 * 2,
     gcTime: 1000 * 60 * 5,
     refetchOnWindowFocus: false,
@@ -57,12 +55,14 @@ export const useGetChats = (filters: ChatFilter = {}) => {
   })
 
   const chats = useMemo(() => {
-    return data?.pages.flatMap(page => page.data) ?? []
+    if (!data) return []
+
+    return data.pages.flatMap(page => page.data)
   }, [data])
 
   const updateChatInCache = useCallback(
     (chatId: string, updates: Partial<Chat>) => {
-      queryClient.setQueryData(['chats', 'list', filters], (oldData: any) => {
+      queryClient.setQueryData(queryKey, (oldData: any) => {
         if (!oldData) return oldData
 
         return {
@@ -76,66 +76,61 @@ export const useGetChats = (filters: ChatFilter = {}) => {
         }
       })
     },
-    [queryClient, filters]
+    [queryClient, queryKey]
   )
 
-  const updateChatParticipantsInChache = useCallback(
+  const updateChatParticipantsInCache = useCallback(
     (chatId: string, userId: string, isDelete: boolean) => {
-      const currentData = queryClient.getQueryData(['chats', 'list', filters])
+      queryClient.setQueryData(queryKey, (oldData: any) => {
+        if (!oldData) return oldData
 
-      if (currentData) {
-        // Находим нужный чат и обновляем его participants
-        queryClient.setQueryData(['chats', 'list', filters], (oldData: any) => {
-          if (!oldData) return oldData
-
-          return {
-            ...oldData,
-            pages: oldData.pages.map((page: PaginatedResponse<Chat[]>) => ({
-              ...page,
-              data: page.data.map(chat => {
-                if (chat.id === chatId) {
-                  if (isDelete) {
-                    return {
-                      ...chat,
-                      participants: (chat.participants || []).filter(
-                        p => p.id !== userId
-                      )
-                    }
-                  } else {
-                    const existingParticipant = chat.participants?.find(
-                      p => p.id === userId
+        return {
+          ...oldData,
+          pages: oldData.pages.map((page: PaginatedResponse<Chat[]>) => ({
+            ...page,
+            data: page.data.map(chat => {
+              if (chat.id === chatId) {
+                if (isDelete) {
+                  return {
+                    ...chat,
+                    participants: (chat.participants || []).filter(
+                      p => p.id !== userId
                     )
+                  }
+                } else {
+                  const existingParticipant = chat.participants?.find(
+                    p => p.id === userId
+                  )
 
-                    if (existingParticipant) {
-                      return chat
-                    }
+                  if (existingParticipant) {
+                    return chat
+                  }
 
-                    return {
-                      ...chat,
-                      participants: [
-                        ...(chat.participants || []),
-                        {
-                          id: userId,
-                          joinedAt: new Date().toISOString(),
-                          role: EnumParticipantRole.MEMBER
-                        }
-                      ]
-                    }
+                  return {
+                    ...chat,
+                    participants: [
+                      ...(chat.participants || []),
+                      {
+                        id: userId,
+                        joinedAt: new Date().toISOString(),
+                        role: EnumParticipantRole.MEMBER
+                      }
+                    ]
                   }
                 }
-                return chat
-              })
-            }))
-          }
-        })
-      }
+              }
+              return chat
+            })
+          }))
+        }
+      })
     },
-    [queryClient, filters]
+    [queryClient, queryKey]
   )
 
   const removeChatFromCache = useCallback(
     (chatId: string) => {
-      queryClient.setQueryData(['chats', 'list', filters], (oldData: any) => {
+      queryClient.setQueryData(queryKey, (oldData: any) => {
         if (!oldData) return oldData
 
         return {
@@ -151,15 +146,38 @@ export const useGetChats = (filters: ChatFilter = {}) => {
         }
       })
     },
-    [queryClient, filters]
+    [queryClient, queryKey]
   )
 
   const addChatToCache = useCallback(
     (newChat: Chat) => {
-      queryClient.setQueryData(['chats', 'list', filters], (oldData: any) => {
-        if (!oldData) return oldData
+      queryClient.setQueryData(queryKey, (oldData: any) => {
+        if (!oldData)
+          return {
+            pages: [
+              {
+                data: [newChat],
+                meta: {
+                  total: 1,
+                  limit: 50,
+                  nextCursor: null,
+                  hasNextPage: false
+                }
+              }
+            ],
+            pageParams: [null]
+          }
+
+        const chatExists = oldData.pages.some((page: any) =>
+          page.data.some((chat: Chat) => chat.id === newChat.id)
+        )
+
+        if (chatExists) {
+          return oldData
+        }
 
         const firstPage = oldData.pages[0]
+
         return {
           ...oldData,
           pages: [
@@ -176,7 +194,7 @@ export const useGetChats = (filters: ChatFilter = {}) => {
         }
       })
     },
-    [queryClient, filters]
+    [queryClient, queryKey]
   )
 
   const loadMore = useCallback(() => {
@@ -195,12 +213,10 @@ export const useGetChats = (filters: ChatFilter = {}) => {
       error,
       refetch,
       isFetching,
-      totalPages: data?.pages[0]?.meta.totalPages ?? 0,
       total: data?.pages[0]?.meta.total ?? 0,
-      currentPage: data?.pages[data.pages.length - 1]?.meta.page ?? 1,
       isEmpty: chats.length === 0,
       updateChatInCache,
-      updateChatParticipantsInChache,
+      updateChatParticipantsInCache,
       removeChatFromCache,
       addChatToCache
     }),
@@ -215,7 +231,7 @@ export const useGetChats = (filters: ChatFilter = {}) => {
       isFetching,
       data?.pages,
       updateChatInCache,
-      updateChatParticipantsInChache,
+      updateChatParticipantsInCache,
       removeChatFromCache,
       addChatToCache
     ]

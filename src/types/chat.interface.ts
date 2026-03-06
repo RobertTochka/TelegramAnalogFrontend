@@ -1,4 +1,4 @@
-import { MessageDto } from './message.interface'
+import { Message } from './message.interface'
 import { EnumUserStatus } from './user.interface'
 
 export interface Chat {
@@ -12,8 +12,8 @@ export interface Chat {
   isPrivate: boolean
   inviteLink?: string
   participants: ChatParticipant[]
-  lastMessage?: MessageDto
-  pinnedMessage?: MessageDto
+  lastMessage?: Message
+  pinnedMessage?: Message
   unreadCount?: number
   createdAt: string
   updatedAt: string
@@ -42,7 +42,7 @@ export interface ChatFilter {
   isArchived?: boolean
   isMuted?: boolean
   search?: string
-  page?: number
+  cursor?: string
   limit?: number
 }
 
@@ -71,10 +71,8 @@ export interface PaginatedResponse<T> {
   data: T
   meta: {
     total: number
-    page: number
     limit: number
-    totalPages: number
+    nextCursor: string | null
     hasNextPage: boolean
-    hasPreviousPage: boolean
   }
 }

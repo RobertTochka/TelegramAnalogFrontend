@@ -1,15 +1,15 @@
 'use client'
 
 import { Loader2 } from 'lucide-react'
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 
 import { ScrollArea } from '@/components/ui'
 
 import { MessageItem } from './MessageItem'
-import { Message } from '@/types'
+import { Message, Profile } from '@/types'
 
 interface ChatWindowProps {
-  currentUserId: string
+  currentUser: Profile
   typingUsers: Set<string>
   all: Message[]
   isEmpty: boolean
@@ -19,7 +19,7 @@ interface ChatWindowProps {
 }
 
 export const ChatWindow = ({
-  currentUserId,
+  currentUser,
   typingUsers,
   all,
   isEmpty,
@@ -29,26 +29,67 @@ export const ChatWindow = ({
 }: ChatWindowProps) => {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
+  const prevScrollHeightRef = useRef<number>(0)
+  const isInitialLoad = useRef(true)
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (isInitialLoad.current && all.length > 0) {
+      messagesEndRef.current?.scrollIntoView()
+      isInitialLoad.current = false
+    }
   }, [all])
 
-  const handleScroll = useCallback(
-    (e: React.UIEvent<HTMLDivElement>) => {
-      const target = e.target as HTMLDivElement
-      if (target.scrollTop === 0 && hasNextPage && !isFetchingNextPage) {
-        const scrollHeight = target.scrollHeight
-        fetchNextPage()
-        target.scrollTop = target.scrollHeight - scrollHeight
+  useEffect(() => {
+    if (messagesContainerRef.current) {
+      const { scrollHeight, clientHeight, scrollTop } =
+        messagesContainerRef.current
+      const isNearBottom = scrollHeight - clientHeight - scrollTop < 100
+
+      if (isNearBottom) {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
       }
-    },
-    [hasNextPage, isFetchingNextPage, fetchNextPage]
-  )
+    }
+  }, [all])
+
+  useEffect(() => {
+    if (
+      !isFetchingNextPage &&
+      prevScrollHeightRef.current &&
+      messagesContainerRef.current
+    ) {
+      const newScrollHeight = messagesContainerRef.current.scrollHeight
+      const scrollDiff = newScrollHeight - prevScrollHeightRef.current
+
+      messagesContainerRef.current.scrollTop = scrollDiff
+      prevScrollHeightRef.current = 0
+    }
+  }, [all, isFetchingNextPage])
+
+  useLayoutEffect(() => {
+    if (!prevScrollHeightRef.current || !messagesContainerRef.current) return
+
+    const el = messagesContainerRef.current
+    const newHeight = el.scrollHeight
+
+    el.scrollTop = newHeight - prevScrollHeightRef.current
+    prevScrollHeightRef.current = 0
+  }, [all])
+
+  const handleScroll = useCallback(() => {
+    const el = messagesContainerRef.current
+
+    if (!el) return
+
+    if (el.scrollTop < 100 && hasNextPage) {
+      prevScrollHeightRef.current = el.scrollHeight
+
+      fetchNextPage()
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
   return (
-    <ScrollArea
-      className='flex-1 px-4'
+    <div
+      className='flex-1 overflow-y-auto px-4'
       onScroll={handleScroll}
       ref={messagesContainerRef}
     >
@@ -62,8 +103,9 @@ export const ChatWindow = ({
         {!isEmpty &&
           all.map((message, index) => (
             <MessageItem
+              key={message.id}
               message={message}
-              currentUserId={currentUserId}
+              currentUserId={currentUser.id}
               showAvatar={
                 index === 0 || all[index - 1]?.sender?.id !== message.sender?.id
               }
@@ -90,6 +132,6 @@ export const ChatWindow = ({
 
         <div ref={messagesEndRef} />
       </div>
-    </ScrollArea>
+    </div>
   )
 }

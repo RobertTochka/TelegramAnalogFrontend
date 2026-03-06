@@ -6,6 +6,7 @@ import toast from 'react-hot-toast'
 import { api } from '@/api/api'
 
 import { IVerificationData } from '@/types'
+import { useSocket } from '@/web-socket/SocketProvider'
 
 export const useVerify = () => {
   const router = useRouter()

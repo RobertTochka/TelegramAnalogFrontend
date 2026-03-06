@@ -10,23 +10,37 @@ import { ChatHeader } from './ChatHeader'
 import { ChatWindow } from './ChatWindow'
 import { FileItem } from './FileItem'
 import { InputForm } from './InputForm'
-import { Message } from '@/types'
+import {
+  ChatFilter,
+  EnumMessageStatus,
+  Message,
+  MessageFilter,
+  Profile
+} from '@/types'
 import { useMessageSocket } from '@/web-socket/hooks'
 
 interface ChatContainerProps {
   chatId: string
-  currentUserId: string
+  currentUser: Profile
   setSelectedChatId: Dispatch<SetStateAction<string>>
+  chatsQuery: ChatFilter
 }
 
 export const ChatContainer: FC<ChatContainerProps> = ({
   chatId,
-  currentUserId,
-  setSelectedChatId
+  currentUser,
+  setSelectedChatId,
+  chatsQuery
 }) => {
-  const [all, setAll] = useState<Message[]>([])
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set())
   const [attachedFiles, setAttachedFiles] = useState<File[]>([])
+  const [searchMessagesQuery, setSearchMessagesQuery] = useState('')
+  const [messagesQuery, setMessagesQuery] = useState<
+    Omit<MessageFilter, 'page'>
+  >({
+    limit: 20,
+    search: searchMessagesQuery || undefined
+  })
 
   const { chat, isLoadingChat } = useGetOneChat(chatId)
 
@@ -37,9 +51,11 @@ export const ChatContainer: FC<ChatContainerProps> = ({
     isFetchingNextPage,
     isLoading,
     isEmpty
-  } = useGetMessages(chatId, { limit: 50 })
+  } = useGetMessages(chatId, messagesQuery)
 
   const { sendMessage, sendTyping, markAsRead } = useMessageSocket({
+    messagesQuery,
+    chatsQuery,
     chatId,
     onTyping: data => {
       setTypingUsers(prev => {
@@ -51,25 +67,23 @@ export const ChatContainer: FC<ChatContainerProps> = ({
         }
         return newSet
       })
-    },
-    onNewMessage: msg => {
-      setAll(prev => [...prev, msg])
     }
   })
 
   useEffect(() => {
-    setAll(messages)
     if (chatId && messages.length > 0) {
       const unreadMessages = messages
-        .filter(msg => msg.sender!.id !== currentUserId)
-        .filter(msg => msg.statuses?.[currentUserId] !== 'READ')
+        .filter(msg => msg.sender!.id !== currentUser.id)
+        .filter(
+          msg => msg.statuses?.[currentUser.id] !== EnumMessageStatus.READ
+        )
         .map(msg => msg.id)
 
       if (unreadMessages.length > 0) {
         markAsRead(unreadMessages)
       }
     }
-  }, [chatId, messages, currentUserId, markAsRead])
+  }, [chatId, messages, currentUser.id, markAsRead])
 
   const removeFile = (index: number) => {
     setAttachedFiles(prev => prev.filter((_, i) => i !== index))
@@ -90,14 +104,14 @@ export const ChatContainer: FC<ChatContainerProps> = ({
     <div className='flex h-full flex-col'>
       <ChatHeader
         typingUsers={typingUsers}
-        participant={chat?.participants.find(p => p.id !== currentUserId)!}
+        participant={chat?.participants.find(p => p.id !== currentUser.id)!}
         onBack={() => setSelectedChatId('')}
       />
 
       <ChatWindow
-        currentUserId={currentUserId}
+        currentUser={currentUser}
         typingUsers={typingUsers}
-        all={all}
+        all={messages}
         isEmpty={isEmpty}
         hasNextPage={hasNextPage}
         isFetchingNextPage={isFetchingNextPage}
@@ -126,6 +140,7 @@ export const ChatContainer: FC<ChatContainerProps> = ({
         setAttachedFiles={setAttachedFiles}
         sendMessage={sendMessage}
         sendTyping={sendTyping}
+        currentUser={currentUser}
       />
     </div>
   )

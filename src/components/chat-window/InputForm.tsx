@@ -12,19 +12,26 @@ import {
   TooltipTrigger
 } from '@/components/ui'
 
-import { CreateMessageDto } from '@/types'
+import { CreateMessageDto, Message, MessageSenderDto, Profile } from '@/types'
 
 interface InputFormProps {
   chatId: string
   attachedFiles: File[]
+  currentUser: Profile
   setAttachedFiles: Dispatch<SetStateAction<File[]>>
-  sendMessage: (data: CreateMessageDto) => void
+  sendMessage: (
+    data: CreateMessageDto,
+    sender: MessageSenderDto,
+    replyTo?: Message,
+    forwardedFrom?: Message
+  ) => void
   sendTyping: (isTyping: boolean) => void
 }
 
 export const InputForm = ({
   chatId,
   attachedFiles,
+  currentUser,
   setAttachedFiles,
   sendMessage,
   sendTyping
@@ -54,7 +61,15 @@ export const InputForm = ({
     if (!messageText.trim() && attachedFiles.length === 0) return
 
     // Здесь будет логика отправки сообщения с файлами
-    sendMessage({ chatId, content: messageText })
+    sendMessage(
+      { chatId, content: messageText },
+      {
+        id: currentUser.id,
+        firstName: currentUser.firstName,
+        lastName: currentUser.lastName,
+        avatar: currentUser.avatar
+      }
+    )
 
     setMessageText('')
     setAttachedFiles([])

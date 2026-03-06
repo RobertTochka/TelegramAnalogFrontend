@@ -7,8 +7,9 @@ import { Message, MessageFilter, PaginatedResponse } from '@/types'
 
 export const useGetMessages = (
   chatId: string,
-  filters: Omit<MessageFilter, 'page'> = {}
+  filters: Omit<MessageFilter, 'cursor'> = {}
 ) => {
+  const queryKey = ['messages', 'list', chatId, JSON.stringify(filters)]
   const queryClient = useQueryClient()
 
   const {
@@ -21,8 +22,8 @@ export const useGetMessages = (
     refetch,
     isFetching
   } = useInfiniteQuery({
-    queryKey: ['messages', 'list', filters],
-    queryFn: async ({ pageParam = 1 }) => {
+    queryKey,
+    queryFn: async ({ pageParam }: { pageParam: string | null }) => {
       const params = new URLSearchParams()
 
       Object.entries(filters).forEach(([key, value]) => {
@@ -31,23 +32,21 @@ export const useGetMessages = (
         }
       })
 
-      params.set('page', String(pageParam))
+      if (pageParam) {
+        params.set('cursor', pageParam)
+      }
 
       const { data } = await api.get<PaginatedResponse<Message[]>>(
-        `/messages/${chatId}?${params.toString()}`
+        `/messages/${chatId}`,
+        { params }
       )
 
       return data
     },
     getNextPageParam: lastPage => {
-      return lastPage.meta.hasNextPage ? lastPage.meta.page + 1 : undefined
+      return lastPage.meta.nextCursor
     },
-    getPreviousPageParam: firstPage => {
-      return firstPage.meta.hasPreviousPage
-        ? firstPage.meta.page - 1
-        : undefined
-    },
-    initialPageParam: 1,
+    initialPageParam: null,
     staleTime: 1000 * 60 * 1,
     gcTime: 1000 * 60 * 5,
     refetchOnWindowFocus: false,
@@ -55,85 +54,105 @@ export const useGetMessages = (
     enabled: !!chatId
   })
 
-  const messages = useMemo(
-    () => data?.pages.flatMap(page => page.data) ?? [],
-    [data]
-  )
+  const messages = useMemo(() => {
+    if (!data) return []
+
+    const map = new Map()
+
+    for (const page of data.pages) {
+      for (const msg of page.data) {
+        map.set(msg.id, msg)
+      }
+    }
+
+    return Array.from(map.values()).sort((a, b) =>
+      a.createdAt.localeCompare(b.createdAt)
+    )
+  }, [data])
 
   const updateMessageInCache = useCallback(
     (messageId: string, updates: Partial<Message>) => {
-      queryClient.setQueryData(
-        ['messages', 'list', filters],
-        (oldData: any) => {
-          if (!oldData) return oldData
+      queryClient.setQueryData(queryKey, (oldData: any) => {
+        if (!oldData) return oldData
 
-          return {
-            ...oldData,
-            pages: oldData.pages.map((page: PaginatedResponse<Message[]>) => ({
-              ...page,
-              data: page.data.map(message =>
-                message.id === messageId ? { ...message, ...updates } : message
-              )
-            }))
-          }
+        return {
+          ...oldData,
+          pages: oldData.pages.map((page: PaginatedResponse<Message[]>) => ({
+            ...page,
+            data: page.data.map(message =>
+              message.id === messageId ? { ...message, ...updates } : message
+            )
+          }))
         }
-      )
+      })
     },
-    [queryClient, filters]
+    [queryClient, queryKey]
   )
 
   const removeMessageFromCache = useCallback(
     (messageId: string) => {
-      queryClient.setQueryData(
-        ['messages', 'list', filters],
-        (oldData: any) => {
-          if (!oldData) return oldData
+      queryClient.setQueryData(queryKey, (oldData: any) => {
+        if (!oldData) return oldData
 
-          return {
-            ...oldData,
-            pages: oldData.pages.map((page: PaginatedResponse<Message[]>) => ({
-              ...page,
-              data: page.data.filter(
-                (message: Message) => message.id !== messageId
-              ),
-              meta: {
-                ...page.meta,
-                total: page.meta.total - 1
-              }
-            }))
-          }
+        return {
+          ...oldData,
+          pages: oldData.pages.map((page: PaginatedResponse<Message[]>) => ({
+            ...page,
+            data: page.data.filter(
+              (message: Message) => message.id !== messageId
+            ),
+            meta: {
+              ...page.meta,
+              total: page.meta.total - 1
+            }
+          }))
         }
-      )
+      })
     },
-    [queryClient, filters]
+    [queryClient, queryKey]
+  )
+
+  const replaceTempMessage = useCallback(
+    (tempId: string, actualMessage: Message) => {
+      queryClient.setQueryData(queryKey, (oldData: any) => {
+        if (!oldData) return oldData
+
+        return {
+          ...oldData,
+          pages: oldData.pages.map((page: PaginatedResponse<Message[]>) => ({
+            ...page,
+            data: page.data.map((message: Message) =>
+              message.id === tempId ? actualMessage : message
+            )
+          }))
+        }
+      })
+    },
+    []
   )
 
   const addMessageToCache = useCallback(
-    (newMessage: Message) => {
-      queryClient.setQueryData(
-        ['messages', 'list', filters],
-        (oldData: any) => {
-          if (!oldData) return oldData
+    (message: Message) => {
+      queryClient.setQueryData(queryKey, (old: any) => {
+        if (!old) return old
 
-          const firstPage = oldData.pages[0]
-          return {
-            ...oldData,
-            pages: [
-              {
-                ...firstPage,
-                data: [newMessage, ...firstPage.data],
-                meta: {
-                  ...firstPage.meta,
-                  total: firstPage.meta.total + 1
-                }
-              },
-              ...oldData.pages.slice(1)
-            ]
-          }
+        const firstPage = old.pages[0]
+
+        if (firstPage.data.find((m: Message) => m.id === message.id)) return old
+
+        return {
+          ...old,
+          pages: [
+            {
+              ...firstPage,
+              data: [message, ...firstPage.data]
+            },
+            ...old.pages.slice(1)
+          ]
         }
-      )
+      })
     },
-    [queryClient, filters]
+    [queryClient, queryKey]
   )
 
   const loadMore = useCallback(() => {
@@ -152,12 +171,11 @@ export const useGetMessages = (
       error,
       refetch,
       isFetching,
-      totalPages: data?.pages[0]?.meta.totalPages ?? 0,
       total: data?.pages[0]?.meta.total ?? 0,
-      currentPage: data?.pages[data.pages.length - 1]?.meta.page ?? 1,
       isEmpty: messages.length === 0,
       updateMessageInCache,
       removeMessageFromCache,
+      replaceTempMessage,
       addMessageToCache
     }),
     [
@@ -172,6 +190,7 @@ export const useGetMessages = (
       data?.pages,
       updateMessageInCache,
       removeMessageFromCache,
+      replaceTempMessage,
       addMessageToCache
     ]
   )

@@ -1,31 +1,47 @@
 'use client'
 
 import { ChevronDown, Loader2, MessageCircle } from 'lucide-react'
-import { FC, useCallback, useEffect, useRef, useState } from 'react'
+import {
+  Dispatch,
+  FC,
+  SetStateAction,
+  useCallback,
+  useEffect,
+  useRef,
+  useState
+} from 'react'
 import toast from 'react-hot-toast'
 
 import { useGetChats } from '@/api/hooks/chat'
+import { useMarkAsRead } from '@/api/hooks/chat/use-mark-as-read'
 
 import { Button, ScrollArea } from '@/components/ui'
 
 import { ChatListItem } from './ChatListItem'
 import { ChatListLoading } from './ChatListLoading'
 import { ChatListSearch } from './ChatListSearch'
-import { Chat, EnumChatType } from '@/types'
+import { Chat, ChatFilter, EnumChatType } from '@/types'
 import { useChatSocket } from '@/web-socket/hooks/use-chat-socket'
 
 interface ChatListProps {
   currentUserId: string
   selectedChatId: string
   onSelectChat?: (chatId: string) => void
+  searchQuery: string
+  chatsQuery: ChatFilter
+  setChatsQuery: Dispatch<SetStateAction<ChatFilter>>
+  setSearchQuery: Dispatch<SetStateAction<string>>
 }
 
 export const ChatList: FC<ChatListProps> = ({
   currentUserId,
   selectedChatId,
-  onSelectChat
+  onSelectChat,
+  searchQuery,
+  setSearchQuery,
+  chatsQuery,
+  setChatsQuery
 }) => {
-  const [searchQuery, setSearchQuery] = useState('')
   const [filteredChats, setFilteredChats] = useState<Chat[]>([])
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -36,12 +52,12 @@ export const ChatList: FC<ChatListProps> = ({
     isFetchingNextPage,
     isLoading,
     isEmpty
-  } = useGetChats({
-    limit: 20,
-    search: searchQuery || undefined
-  })
+  } = useGetChats(chatsQuery)
+
+  const { markChatAsRead, isLoadingMarkChatAsRead } = useMarkAsRead()
 
   useChatSocket({
+    chatsQuery,
     onNewChat: data => {
       toast.success(`Новый чат: ${data.chat.name || 'Без названия'}`)
     },
@@ -102,7 +118,11 @@ export const ChatList: FC<ChatListProps> = ({
     [hasNextPage, isFetchingNextPage, fetchNextPage]
   )
 
-  if (isLoading) {
+  const handleMarkAsRead = (chatId: string) => {
+    markChatAsRead(chatId)
+  }
+
+  if (isLoading || isLoadingMarkChatAsRead) {
     return <ChatListLoading />
   }
 
@@ -134,10 +154,12 @@ export const ChatList: FC<ChatListProps> = ({
           <div className='divide-y divide-white/5'>
             {filteredChats.map(chat => (
               <ChatListItem
+                key={chat.id}
                 chat={chat}
                 selectedChatId={selectedChatId}
                 currentUserId={currentUserId}
                 onSelectChat={onSelectChat}
+                markChatAsRead={handleMarkAsRead}
               />
             ))}
 

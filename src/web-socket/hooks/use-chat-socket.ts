@@ -6,9 +6,10 @@ import { useGetChats } from '@/api/hooks/chat'
 
 import { useSocket } from '../SocketProvider'
 
-import { Chat } from '@/types'
+import { Chat, ChatFilter } from '@/types'
 
 interface UseChatSocketProps {
+  chatsQuery: ChatFilter
   onNewChat?: (data: { chatId: string; chat: Chat; message: string }) => void
   onChatDeleted?: (data: {
     chatId: string
@@ -39,20 +40,18 @@ interface UseChatSocketProps {
 }
 
 export const useChatSocket = ({
+  chatsQuery,
   onNewChat,
   onChatDeleted,
   onChatAdded,
   onChatRemoved,
   onParticipantJoined,
   onParticipantLeft
-}: UseChatSocketProps = {}) => {
+}: UseChatSocketProps) => {
   const { socket, isConnected } = useSocket()
   const queryClient = useQueryClient()
-  const {
-    addChatToCache,
-    updateChatParticipantsInChache,
-    removeChatFromCache
-  } = useGetChats({})
+  const { addChatToCache, updateChatParticipantsInCache, removeChatFromCache } =
+    useGetChats(chatsQuery)
 
   // Создание чата
   const createChat = useCallback(

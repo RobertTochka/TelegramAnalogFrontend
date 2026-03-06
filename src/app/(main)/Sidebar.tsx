@@ -10,15 +10,24 @@ import { ChatList } from '@/components/chat-list'
 import { Button } from '@/components/ui'
 
 import { APP_NAME } from '@/constants'
+import { ChatFilter } from '@/types'
 
 interface SidebarProps {
   selectedChatId: string
+  searchQuery: string
+  chatsQuery: ChatFilter
+  setChatsQuery: Dispatch<SetStateAction<ChatFilter>>
+  setSearchQuery: Dispatch<SetStateAction<string>>
   setSelectedChatId: Dispatch<SetStateAction<string>>
 }
 
 export const Sidebar = ({
   selectedChatId,
-  setSelectedChatId
+  setSelectedChatId,
+  searchQuery,
+  setSearchQuery,
+  chatsQuery,
+  setChatsQuery
 }: SidebarProps) => {
   const router = useRouter()
   const { logout, isLoadingLogout } = useLogout()
@@ -61,6 +70,10 @@ export const Sidebar = ({
         currentUserId='cmmamev7e0000b4viz7qwhvro'
         selectedChatId={selectedChatId}
         onSelectChat={setSelectedChatId}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        chatsQuery={chatsQuery}
+        setChatsQuery={setChatsQuery}
       />
     </div>
   )
