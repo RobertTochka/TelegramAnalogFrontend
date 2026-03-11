@@ -1,18 +1,17 @@
 'use client'
 
-import { LogOut, MessageCircle } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { MessageCircle } from 'lucide-react'
+import Link from 'next/link'
 import { Dispatch, SetStateAction } from 'react'
 
-import { useLogout } from '@/api/hooks/auth'
-
 import { ChatList } from '@/components/chat-list'
-import { Button } from '@/components/ui'
+import { UserAvatar } from '@/components/user/UserAvatar'
 
 import { APP_NAME } from '@/constants'
-import { ChatFilter } from '@/types'
+import { ChatFilter, Profile } from '@/types'
 
 interface SidebarProps {
+  currentUser: Profile
   selectedChatId: string
   searchQuery: string
   chatsQuery: ChatFilter
@@ -22,6 +21,7 @@ interface SidebarProps {
 }
 
 export const Sidebar = ({
+  currentUser,
   selectedChatId,
   setSelectedChatId,
   searchQuery,
@@ -29,18 +29,6 @@ export const Sidebar = ({
   chatsQuery,
   setChatsQuery
 }: SidebarProps) => {
-  const router = useRouter()
-  const { logout, isLoadingLogout } = useLogout()
-
-  const handleLogout = async () => {
-    try {
-      logout()
-      router.push('/auth')
-    } catch (error) {
-      console.error('Logout error:', error)
-    }
-  }
-
   return (
     <div className='relative z-10 flex w-96 flex-col border-r border-white/5 bg-slate-900/50 backdrop-blur-xl'>
       <div className='flex items-center justify-between border-b border-white/5 p-4'>
@@ -55,19 +43,21 @@ export const Sidebar = ({
             {APP_NAME}
           </h2>
         </div>
-        <Button
-          variant='ghost'
-          size='icon'
-          onClick={handleLogout}
-          disabled={isLoadingLogout}
-          className='text-gray-400 transition-all hover:bg-slate-800 hover:text-white'
+        <Link
+          className='relative shrink-0'
+          href={`profile`}
         >
-          <LogOut className='h-5 w-5' />
-        </Button>
+          <UserAvatar
+            avatar={currentUser.avatar}
+            firstName={currentUser.firstName}
+            status={currentUser.status}
+            userId={currentUser.id}
+          />
+        </Link>
       </div>
 
       <ChatList
-        currentUserId='cmmamev7e0000b4viz7qwhvro'
+        currentUserId={currentUser.id}
         selectedChatId={selectedChatId}
         onSelectChat={setSelectedChatId}
         searchQuery={searchQuery}

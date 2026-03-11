@@ -1,7 +1,6 @@
 'use client'
 
 import { Loader2, MessageCircle } from 'lucide-react'
-import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 import { useGetProfile } from '@/api/hooks/users'
@@ -35,6 +34,7 @@ export const MainPage = () => {
   return (
     <div className='relative flex h-screen overflow-hidden bg-linear-to-br from-slate-950 via-slate-900 to-slate-950'>
       <Sidebar
+        currentUser={profile!}
         selectedChatId={selectedChatId}
         setSelectedChatId={setSelectedChatId}
         searchQuery={searchChatsQuery}

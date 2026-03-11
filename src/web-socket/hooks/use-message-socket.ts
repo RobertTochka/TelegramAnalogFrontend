@@ -21,6 +21,7 @@ import {
 } from '@/types'
 
 interface UseMessageSocketProps {
+  currentUserId: string
   messagesQuery: Omit<MessageFilter, 'page'>
   chatsQuery: ChatFilter
   chatId: string
@@ -37,6 +38,7 @@ interface UseMessageSocketProps {
 }
 
 export const useMessageSocket = ({
+  currentUserId,
   messagesQuery,
   chatsQuery,
   chatId,
@@ -89,6 +91,9 @@ export const useMessageSocket = ({
       }
 
       addMessageToCache(optimisticMessage)
+
+      if (replyTo) data.replyToId = replyTo.id
+      if (forwardedFrom) data.forwardedFromId = forwardedFrom.id
 
       socket.emit('message:send', {
         ...data,
@@ -191,7 +196,7 @@ export const useMessageSocket = ({
 
     // Обработчик нового сообщения
     const handleNewMessage = (data: { message: Message; tempId?: string }) => {
-      if (data.tempId) {
+      if (data.tempId && data.message.sender?.id === currentUserId) {
         replaceTempMessage(data.tempId, data.message)
       } else {
         addMessageToCache(data.message)
@@ -240,22 +245,13 @@ export const useMessageSocket = ({
 
     // Обработчик прочтения
     const handleReadReceipt = (data: ReadReceiptEvent) => {
-      if (data.chatId === chatId && data.messageIds) {
-        data.messageIds.forEach(messageId => {
-          updateMessageInCache(messageId, {
+      if (data.chatId === chatId && data.messages) {
+        data.messages.forEach(msg => {
+          updateMessageInCache(msg.id, {
             statuses: {
-              [data.userId]: EnumMessageStatus.READ
+              [msg.sender.id]: EnumMessageStatus.READ
             }
           })
-        })
-
-        queryClient.setQueryData(['chats', 'list', chatId], (old: any) => {
-          if (!old) return old
-          const updatedParticipants = old.participants?.map(
-            (p: ChatParticipant) =>
-              p.id === data.userId ? { ...p, lastReadAt: data.readAt } : p
-          )
-          return { ...old, participants: updatedParticipants }
         })
       }
 
@@ -268,7 +264,7 @@ export const useMessageSocket = ({
     socket.on('message:deleted', handleMessageDeleted)
     socket.on('typing', handleTyping)
     socket.on('message:status:updated', handleMessageStatus)
-    socket.on('messages:read', handleReadReceipt)
+    socket.on('messages:read:updated', handleReadReceipt)
 
     return () => {
       // Отписка от событий
@@ -277,7 +273,7 @@ export const useMessageSocket = ({
       socket.off('message:deleted', handleMessageDeleted)
       socket.off('typing', handleTyping)
       socket.off('message:status:updated', handleMessageStatus)
-      socket.off('messages:read', handleReadReceipt)
+      socket.off('messages:read:updated', handleReadReceipt)
 
       // Очистка таймаутов
       typingTimeouts.current.forEach(timeout => clearTimeout(timeout))

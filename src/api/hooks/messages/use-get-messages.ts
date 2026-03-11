@@ -128,7 +128,7 @@ export const useGetMessages = (
         }
       })
     },
-    []
+    [queryClient, queryKey]
   )
 
   const addMessageToCache = useCallback(

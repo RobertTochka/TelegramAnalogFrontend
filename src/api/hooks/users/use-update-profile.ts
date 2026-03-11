@@ -12,7 +12,7 @@ export const useUpdateProfile = () => {
   const { mutate: updateProfile, isPending: isLoadingUpdate } = useMutation({
     mutationKey: ['update profile'],
     mutationFn: (userData: Partial<User>) =>
-      api.patch<User>('/users/me', userData).then(res => res.data),
+      api.patch<User>('/users/profile', userData).then(res => res.data),
     onSuccess: updatedUser => {
       queryClient.setQueryData(['me'], updatedUser)
       queryClient.invalidateQueries({ queryKey: ['me'] })

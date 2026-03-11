@@ -60,3 +60,10 @@ export enum EnumUserVisibility {
   VISIBLE = 'VISIBLE',
   INVISIBLE = 'INVISIBLE'
 }
+
+export enum EnumFriendshipStatus {
+  PENDING = 'PENDING',
+  ACCEPTED = 'ACCEPTED',
+  DECLINED = 'DECLINED',
+  BLOCKED = 'BLOCKED'
+}

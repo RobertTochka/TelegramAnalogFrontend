@@ -12,37 +12,40 @@ import {
   TooltipTrigger
 } from '@/components/ui'
 
-import { CreateMessageDto, Message, MessageSenderDto, Profile } from '@/types'
-
 interface InputFormProps {
-  chatId: string
+  messageText: string
+  setMessageText: Dispatch<SetStateAction<string>>
+  onSend: () => void
   attachedFiles: File[]
-  currentUser: Profile
   setAttachedFiles: Dispatch<SetStateAction<File[]>>
-  sendMessage: (
-    data: CreateMessageDto,
-    sender: MessageSenderDto,
-    replyTo?: Message,
-    forwardedFrom?: Message
-  ) => void
+  editMessage: (messageId: string, content: string) => void
   sendTyping: (isTyping: boolean) => void
+  editing: boolean
+  editedText: string
+  setEditedText: Dispatch<SetStateAction<string>>
+  setEditing: Dispatch<SetStateAction<boolean>>
+  editingId: string
 }
 
 export const InputForm = ({
-  chatId,
+  messageText,
+  setMessageText,
+  onSend,
   attachedFiles,
-  currentUser,
   setAttachedFiles,
-  sendMessage,
-  sendTyping
+  editMessage,
+  sendTyping,
+  editing,
+  editedText,
+  setEditedText,
+  setEditing,
+  editingId
 }: InputFormProps) => {
-  const [messageText, setMessageText] = useState('')
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [showFileMenu, setShowFileMenu] = useState(false)
   const emojiPickerRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Закрытие emoji picker при клике вне
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -57,35 +60,44 @@ export const InputForm = ({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  const handleSendMessage = async () => {
-    if (!messageText.trim() && attachedFiles.length === 0) return
+  useEffect(() => {
+    if (editing) setMessageText(editedText)
+  }, [editing, editedText])
 
-    // Здесь будет логика отправки сообщения с файлами
-    sendMessage(
-      { chatId, content: messageText },
-      {
-        id: currentUser.id,
-        firstName: currentUser.firstName,
-        lastName: currentUser.lastName,
-        avatar: currentUser.avatar
-      }
-    )
+  const handleEditMessage = () => {
+    if (!messageText.trim() && attachedFiles.length === 0) return
+    if (messageText === editedText) {
+      setMessageText('')
+      setEditedText('')
+      setEditing(false)
+      setAttachedFiles([])
+      return
+    }
+
+    editMessage(editingId, messageText)
 
     setMessageText('')
+    setEditedText('')
+    setEditing(false)
     setAttachedFiles([])
-    sendTyping(false)
   }
 
   const handleTyping = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value
     setMessageText(value)
-    sendTyping(true)
+
+    if (!editing) sendTyping(true)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      handleSendMessage()
+
+      if (editing) {
+        handleEditMessage()
+      } else {
+        onSend()
+      }
     }
   }
 
@@ -188,7 +200,7 @@ export const InputForm = ({
         </div>
 
         <Button
-          onClick={handleSendMessage}
+          onClick={editing ? handleEditMessage : onSend}
           disabled={!messageText.trim() && attachedFiles.length === 0}
           className='bg-linear-to-r from-purple-600 to-blue-600 text-white transition-all hover:from-purple-700 hover:to-blue-700 hover:shadow-lg hover:shadow-purple-500/25 disabled:opacity-50'
         >

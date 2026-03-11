@@ -48,8 +48,12 @@ export interface MessageStatusEvent {
 
 export interface ReadReceiptEvent {
   chatId: string
-  userId: string
-  messageIds?: string[]
+  messages: {
+    id: string
+    sender: {
+      id: string
+    }
+  }[]
   readAt: string
 }
 

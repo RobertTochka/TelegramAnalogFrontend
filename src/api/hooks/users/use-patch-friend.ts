@@ -4,15 +4,17 @@ import toast from 'react-hot-toast'
 
 import { api } from '@/api/api'
 
-export const useAddFriend = () => {
+import { EnumFriendshipStatus } from '@/types'
+
+export const usePatchFriend = () => {
   const queryClient = useQueryClient()
 
-  const { mutate: addFriend, isPending: isLoadingAddFriend } = useMutation({
-    mutationKey: ['add friend'],
-    mutationFn: (dto: { friendId: string }) =>
-      api.post<void>('/users/friends', dto).then(res => res.data),
+  const { mutate: patchFriend, isPending: isLoadingPatchFriend } = useMutation({
+    mutationKey: ['patch friend'],
+    mutationFn: (dto: { friendId: string; status: EnumFriendshipStatus }) =>
+      api.patch<void>('/users/friends', dto),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['friends'] })
+      queryClient.invalidateQueries({ queryKey: ['me'] })
       toast.success('Приглашение отправлено')
     },
     onError: (error: any) => {
@@ -24,9 +26,9 @@ export const useAddFriend = () => {
 
   return useMemo(
     () => ({
-      addFriend,
-      isLoadingAddFriend
+      patchFriend,
+      isLoadingPatchFriend
     }),
-    [addFriend, isLoadingAddFriend]
+    [patchFriend, isLoadingPatchFriend]
   )
 }

@@ -10,6 +10,8 @@ import { ChatHeader } from './ChatHeader'
 import { ChatWindow } from './ChatWindow'
 import { FileItem } from './FileItem'
 import { InputForm } from './InputForm'
+import { ForwardDialog } from './message/ForwardDialog'
+import { ReplyBanner } from './message/ReplyBanner'
 import {
   ChatFilter,
   EnumMessageStatus,
@@ -32,14 +34,21 @@ export const ChatContainer: FC<ChatContainerProps> = ({
   setSelectedChatId,
   chatsQuery
 }) => {
+  const [messageText, setMessageText] = useState('')
+  const [editingId, setEditingId] = useState('')
+  const [editing, setEditing] = useState(false)
+  const [editedText, setEditedText] = useState('')
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set())
   const [attachedFiles, setAttachedFiles] = useState<File[]>([])
-  const [searchMessagesQuery, setSearchMessagesQuery] = useState('')
+  const [replyTo, setReplyTo] = useState<Message | undefined>(undefined)
+  const [forwardedFrom, setForwardedFrom] = useState<Message | undefined>(
+    undefined
+  )
+  const [filteredMessages, setFilteredMessages] = useState<Message[]>([])
   const [messagesQuery, setMessagesQuery] = useState<
     Omit<MessageFilter, 'page'>
   >({
-    limit: 20,
-    search: searchMessagesQuery || undefined
+    limit: 40
   })
 
   const { chat, isLoadingChat } = useGetOneChat(chatId)
@@ -53,22 +62,24 @@ export const ChatContainer: FC<ChatContainerProps> = ({
     isEmpty
   } = useGetMessages(chatId, messagesQuery)
 
-  const { sendMessage, sendTyping, markAsRead } = useMessageSocket({
-    messagesQuery,
-    chatsQuery,
-    chatId,
-    onTyping: data => {
-      setTypingUsers(prev => {
-        const newSet = new Set(prev)
-        if (data.isTyping) {
-          newSet.add(data.userId)
-        } else {
-          newSet.delete(data.userId)
-        }
-        return newSet
-      })
-    }
-  })
+  const { sendMessage, editMessage, deleteMessage, sendTyping, markAsRead } =
+    useMessageSocket({
+      currentUserId: currentUser.id,
+      messagesQuery,
+      chatsQuery,
+      chatId,
+      onTyping: data => {
+        setTypingUsers(prev => {
+          const newSet = new Set(prev)
+          if (data.isTyping) {
+            newSet.add(data.userId)
+          } else {
+            newSet.delete(data.userId)
+          }
+          return newSet
+        })
+      }
+    })
 
   useEffect(() => {
     if (chatId && messages.length > 0) {
@@ -85,8 +96,46 @@ export const ChatContainer: FC<ChatContainerProps> = ({
     }
   }, [chatId, messages, currentUser.id, markAsRead])
 
+  useEffect(() => {
+    const search = messagesQuery.search
+    if (search) {
+      const filtered = messages.filter(message => {
+        return message.content?.toLowerCase().includes(search.toLowerCase())
+      })
+      setFilteredMessages(filtered)
+    } else {
+      setFilteredMessages(messages)
+    }
+  }, [messages, messagesQuery.search])
+
   const removeFile = (index: number) => {
     setAttachedFiles(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const handleSendMessage = (
+    forwardedFrom?: Message,
+    forwardContent?: string
+  ) => {
+    if (!messageText.trim() && attachedFiles.length === 0 && !forwardedFrom)
+      return
+
+    // Здесь будет логика отправки сообщения с файлами
+    sendMessage(
+      { chatId, content: forwardedFrom ? forwardContent : messageText },
+      {
+        id: currentUser.id,
+        firstName: currentUser.firstName,
+        lastName: currentUser.lastName,
+        avatar: currentUser.avatar
+      },
+      replyTo,
+      forwardedFrom
+    )
+
+    setMessageText('')
+    setAttachedFiles([])
+    setReplyTo(undefined)
+    sendTyping(false)
   }
 
   if (isLoading || isLoadingChat) {
@@ -106,17 +155,32 @@ export const ChatContainer: FC<ChatContainerProps> = ({
         typingUsers={typingUsers}
         participant={chat?.participants.find(p => p.id !== currentUser.id)!}
         onBack={() => setSelectedChatId('')}
+        messagesQuery={messagesQuery}
+        setMessagesQuery={setMessagesQuery}
       />
 
       <ChatWindow
         currentUser={currentUser}
         typingUsers={typingUsers}
-        all={messages}
+        messages={filteredMessages}
         isEmpty={isEmpty}
         hasNextPage={hasNextPage}
         isFetchingNextPage={isFetchingNextPage}
         fetchNextPage={fetchNextPage}
+        setEditing={setEditing}
+        setEditedText={setEditedText}
+        setEditingId={setEditingId}
+        deleteMessage={deleteMessage}
+        setReplyTo={setReplyTo}
+        setForwardedFrom={setForwardedFrom}
       />
+
+      {replyTo && (
+        <ReplyBanner
+          replyTo={replyTo}
+          onCancel={() => setReplyTo(undefined)}
+        />
+      )}
 
       {/* Прикрепленные файлы */}
       {attachedFiles.length > 0 && (
@@ -135,13 +199,29 @@ export const ChatContainer: FC<ChatContainerProps> = ({
 
       {/* Форма отправки */}
       <InputForm
-        chatId={chatId}
+        messageText={messageText}
+        setMessageText={setMessageText}
+        onSend={handleSendMessage}
         attachedFiles={attachedFiles}
         setAttachedFiles={setAttachedFiles}
-        sendMessage={sendMessage}
+        editMessage={editMessage}
         sendTyping={sendTyping}
-        currentUser={currentUser}
+        editing={editing}
+        editedText={editedText}
+        setEditedText={setEditedText}
+        setEditing={setEditing}
+        editingId={editingId}
       />
+
+      {forwardedFrom && (
+        <ForwardDialog
+          open={!!forwardedFrom}
+          onOpenChange={() => setForwardedFrom(undefined)}
+          message={forwardedFrom}
+          currentUserId={currentUser.id}
+          onForward={handleSendMessage}
+        />
+      )}
     </div>
   )
 }

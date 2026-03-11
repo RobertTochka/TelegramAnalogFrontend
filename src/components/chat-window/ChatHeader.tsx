@@ -1,39 +1,44 @@
 'use client'
 
-import { ArrowLeft, MoreVertical } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { ArrowLeft, MoreVertical, Search, X } from 'lucide-react'
+import Link from 'next/link'
+import { Dispatch, SetStateAction, useEffect, useState } from 'react'
 
 import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
   Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  Input,
   Tooltip,
   TooltipContent,
   TooltipTrigger
 } from '@/components/ui'
 
 import { formatLastSeen } from '@/utils/format-last-seen'
-import { getInitials } from '@/utils/functions'
 
-import { ChatParticipant, EnumUserStatus } from '@/types'
+import { UserAvatar } from '../user/UserAvatar'
+
+import { ChatParticipant, EnumUserStatus, MessageFilter } from '@/types'
 
 interface ChatHeaderProps {
   typingUsers: Set<string>
   participant: ChatParticipant
   onBack: () => void
+  messagesQuery: Omit<MessageFilter, 'page'>
+  setMessagesQuery: Dispatch<SetStateAction<Omit<MessageFilter, 'page'>>>
 }
 
 export const ChatHeader = ({
   typingUsers,
   participant,
-  onBack
+  onBack,
+  messagesQuery,
+  setMessagesQuery
 }: ChatHeaderProps) => {
   const [isMobile, setIsMobile] = useState(false)
+  const [isOpenSearch, setIsOpenSearch] = useState(false)
 
   useEffect(() => {
     const checkMobile = () => {
@@ -67,19 +72,17 @@ export const ChatHeader = ({
           )}
 
           {/* Аватар */}
-          <div className='relative shrink-0'>
-            <Avatar className='h-10 w-10 ring-2 ring-white/10'>
-              <AvatarImage src={participant.avatar} />
-              <AvatarFallback className='bg-linear-to-r from-purple-600 to-blue-600 text-sm text-white'>
-                {getInitials(participant.firstName)}
-              </AvatarFallback>
-            </Avatar>
-
-            {/* Индикатор онлайн */}
-            {participant.status === EnumUserStatus.ONLINE && (
-              <span className='absolute right-0 bottom-0 h-3 w-3 rounded-full bg-green-500 ring-2 ring-slate-900' />
-            )}
-          </div>
+          <Link
+            className='relative shrink-0'
+            href={`profile/${participant.id}`}
+          >
+            <UserAvatar
+              avatar={participant.avatar}
+              firstName={participant.firstName}
+              status={participant.status}
+              userId={participant.id}
+            />
+          </Link>
 
           {/* Информация о пользователе */}
           <div className='min-w-0 flex-1'>
@@ -141,16 +144,43 @@ export const ChatHeader = ({
               <DropdownMenuItem className='cursor-pointer hover:bg-slate-800'>
                 Информация о чате
               </DropdownMenuItem>
-              <DropdownMenuItem className='cursor-pointer hover:bg-slate-800'>
+              <DropdownMenuItem
+                className='cursor-pointer hover:bg-slate-800'
+                onClick={() => setIsOpenSearch(true)}
+              >
                 Поиск в чате
               </DropdownMenuItem>
-              <DropdownMenuItem className='cursor-pointer hover:bg-slate-800'>
+              <DropdownMenuItem
+                className='cursor-pointer hover:bg-slate-800'
+                onClick={() => setIsOpenSearch(true)}
+              >
                 Очистить историю
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
+
+      {isOpenSearch && (
+        <div className='flex gap-4 border-b border-white/5 p-4'>
+          <div className='group relative w-full'>
+            <Search className='absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-500 transition-colors group-focus-within:text-purple-400' />
+            <Input
+              type='text'
+              placeholder='Поиск чатов...'
+              value={messagesQuery.search}
+              onChange={e => setMessagesQuery({ search: e.target.value })}
+              className='border-white/5 bg-slate-800/50 pl-9 text-white placeholder:text-gray-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500'
+            />
+          </div>
+          <button
+            className='text-sm text-white'
+            onClick={() => setIsOpenSearch(false)}
+          >
+            <X />
+          </button>
+        </div>
+      )}
     </div>
   )
 }

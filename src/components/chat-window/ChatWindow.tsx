@@ -1,31 +1,48 @@
 'use client'
 
 import { Loader2 } from 'lucide-react'
-import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
+import {
+  Dispatch,
+  SetStateAction,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef
+} from 'react'
 
-import { ScrollArea } from '@/components/ui'
-
-import { MessageItem } from './MessageItem'
+import { MessageItem } from './message/MessageItem'
 import { Message, Profile } from '@/types'
 
 interface ChatWindowProps {
   currentUser: Profile
   typingUsers: Set<string>
-  all: Message[]
+  messages: Message[]
   isEmpty: boolean
   hasNextPage: boolean
   isFetchingNextPage: boolean
   fetchNextPage: () => void
+  setEditing: Dispatch<SetStateAction<boolean>>
+  setEditedText: Dispatch<SetStateAction<string>>
+  setEditingId: Dispatch<SetStateAction<string>>
+  deleteMessage: (messageId: string, forEveryone?: boolean) => void
+  setReplyTo: Dispatch<SetStateAction<Message | undefined>>
+  setForwardedFrom: Dispatch<SetStateAction<Message | undefined>>
 }
 
 export const ChatWindow = ({
   currentUser,
   typingUsers,
-  all,
+  messages,
   isEmpty,
   hasNextPage,
   isFetchingNextPage,
-  fetchNextPage
+  fetchNextPage,
+  setEditing,
+  setEditedText,
+  setEditingId,
+  deleteMessage,
+  setReplyTo,
+  setForwardedFrom
 }: ChatWindowProps) => {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
@@ -33,11 +50,11 @@ export const ChatWindow = ({
   const isInitialLoad = useRef(true)
 
   useEffect(() => {
-    if (isInitialLoad.current && all.length > 0) {
+    if (isInitialLoad.current && messages.length > 0) {
       messagesEndRef.current?.scrollIntoView()
       isInitialLoad.current = false
     }
-  }, [all])
+  }, [messages])
 
   useEffect(() => {
     if (messagesContainerRef.current) {
@@ -49,7 +66,7 @@ export const ChatWindow = ({
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
       }
     }
-  }, [all])
+  }, [messages])
 
   useEffect(() => {
     if (
@@ -63,7 +80,7 @@ export const ChatWindow = ({
       messagesContainerRef.current.scrollTop = scrollDiff
       prevScrollHeightRef.current = 0
     }
-  }, [all, isFetchingNextPage])
+  }, [messages, isFetchingNextPage])
 
   useLayoutEffect(() => {
     if (!prevScrollHeightRef.current || !messagesContainerRef.current) return
@@ -73,7 +90,7 @@ export const ChatWindow = ({
 
     el.scrollTop = newHeight - prevScrollHeightRef.current
     prevScrollHeightRef.current = 0
-  }, [all])
+  }, [messages])
 
   const handleScroll = useCallback(() => {
     const el = messagesContainerRef.current
@@ -89,7 +106,7 @@ export const ChatWindow = ({
 
   return (
     <div
-      className='flex-1 overflow-y-auto px-4'
+      className='custom-scrollbar flex-1 overflow-y-auto px-4'
       onScroll={handleScroll}
       ref={messagesContainerRef}
     >
@@ -101,35 +118,24 @@ export const ChatWindow = ({
         )}
 
         {!isEmpty &&
-          all.map((message, index) => (
+          messages.map((message, index) => (
             <MessageItem
               key={message.id}
               message={message}
               currentUserId={currentUser.id}
               showAvatar={
-                index === 0 || all[index - 1]?.sender?.id !== message.sender?.id
+                index === 0 ||
+                messages[index - 1]?.sender?.id !== message.sender?.id
               }
+              setEditing={setEditing}
+              setEditedText={setEditedText}
+              setEditingId={setEditingId}
+              deleteMessage={deleteMessage}
+              containerRef={messagesContainerRef}
+              setReplyTo={setReplyTo}
+              setForwardedFrom={setForwardedFrom}
             />
           ))}
-
-        {/* Индикаторы печатания */}
-        {Array.from(typingUsers).map(userId => (
-          <div
-            key={userId}
-            className='flex items-center gap-2 text-sm text-gray-400'
-          >
-            <div className='flex items-center gap-1 rounded-full bg-slate-800 px-4 py-2'>
-              <span className='h-2 w-2 animate-pulse rounded-full bg-purple-500' />
-              <span>Печатает</span>
-              <span className='flex gap-0.5'>
-                <span className='animate-bounce'>.</span>
-                <span className='animate-bounce delay-100'>.</span>
-                <span className='animate-bounce delay-200'>.</span>
-              </span>
-            </div>
-          </div>
-        ))}
-
         <div ref={messagesEndRef} />
       </div>
     </div>

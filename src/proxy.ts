@@ -21,5 +21,5 @@ export default function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/auth', '/', '/chats']
+  matcher: ['/auth', '/', '/profile', '/profile/:path*']
 }
