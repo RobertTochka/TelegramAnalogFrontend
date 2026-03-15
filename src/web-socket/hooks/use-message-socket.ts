@@ -3,17 +3,14 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import toast from 'react-hot-toast'
 
 import { useGetChats } from '@/api/hooks/chat'
-import { useGetMessages } from '@/api/hooks/messages'
 
 import { useSocket } from '../SocketProvider'
 
 import {
   ChatFilter,
-  ChatParticipant,
   CreateMessageDto,
   EnumMessageStatus,
   Message,
-  MessageFilter,
   MessageSenderDto,
   MessageStatusEvent,
   ReadReceiptEvent,
@@ -22,9 +19,18 @@ import {
 
 interface UseMessageSocketProps {
   currentUserId: string
-  messagesQuery: Omit<MessageFilter, 'page'>
   chatsQuery: ChatFilter
   chatId: string
+
+  addMessageToCache: (message: Message) => void
+  updateMessageInCache: (
+    chatId: string,
+    messageId: string,
+    updates: Partial<Message>
+  ) => void
+  removeMessageFromCache: (chatId: string, messageId: string) => void
+  replaceTempMessage: (tempId: string, actualMessage: Message) => void
+
   onNewMessage?: (message: Message) => void
   onMessageUpdated?: (message: Message) => void
   onMessageDeleted?: (data: {
@@ -39,9 +45,14 @@ interface UseMessageSocketProps {
 
 export const useMessageSocket = ({
   currentUserId,
-  messagesQuery,
   chatsQuery,
   chatId,
+
+  addMessageToCache,
+  updateMessageInCache,
+  removeMessageFromCache,
+  replaceTempMessage,
+
   onNewMessage,
   onMessageUpdated,
   onMessageDeleted,
@@ -49,18 +60,15 @@ export const useMessageSocket = ({
   onMessageStatus,
   onReadReceipt
 }: UseMessageSocketProps) => {
-  const { socket, isConnected } = useSocket()
+  const { messageSocket, isMessageConnected } = useSocket()
   const queryClient = useQueryClient()
-  const {
-    addMessageToCache,
-    updateMessageInCache,
-    removeMessageFromCache,
-    replaceTempMessage
-  } = useGetMessages(chatId, messagesQuery)
   const { updateChatInCache } = useGetChats(chatsQuery)
 
   // Таймауты для печатания
   const typingTimeouts = useRef<Map<string, NodeJS.Timeout>>(new Map())
+
+  const lastTypingEmitTime = useRef<Map<string, number>>(new Map())
+  const typingThrottleTime = 3000
 
   // Отправка сообщения
   const sendMessage = useCallback(
@@ -70,7 +78,7 @@ export const useMessageSocket = ({
       replyTo?: Message,
       forwardedFrom?: Message
     ) => {
-      if (!socket || !isConnected) {
+      if (!messageSocket || !isMessageConnected) {
         toast.error('Нет подключения к серверу')
         return
       }
@@ -95,104 +103,118 @@ export const useMessageSocket = ({
       if (replyTo) data.replyToId = replyTo.id
       if (forwardedFrom) data.forwardedFromId = forwardedFrom.id
 
-      socket.emit('message:send', {
+      messageSocket.emit('message:send', {
         ...data,
         tempId
       })
     },
-    [socket, isConnected, chatId]
+    [messageSocket, isMessageConnected, chatId, addMessageToCache]
   )
 
   // Редактирование сообщения
   const editMessage = useCallback(
     (messageId: string, content: string) => {
-      if (!socket || !isConnected) return
+      if (!messageSocket || !isMessageConnected) return
 
-      socket.emit('message:edit', {
+      messageSocket.emit('message:edit', {
         messageId,
         content
       })
     },
-    [socket, isConnected]
+    [messageSocket, isMessageConnected]
   )
 
   // Удаление сообщения
   const deleteMessage = useCallback(
     (messageId: string, forEveryone: boolean = false) => {
-      if (!socket || !isConnected) return
+      if (!messageSocket || !isMessageConnected) return
 
-      socket.emit('message:delete', {
+      messageSocket.emit('message:delete', {
         messageId,
         forEveryone
       })
     },
-    [socket, isConnected]
+    [messageSocket, isMessageConnected]
   )
 
   // Индикатор печатания
   const sendTyping = useCallback(
     (isTyping: boolean) => {
-      if (!socket || !isConnected) return
-
-      socket.emit('typing', {
-        chatId,
-        isTyping
-      })
+      if (!messageSocket || !isMessageConnected) return
 
       const timeoutKey = `${chatId}`
+      const now = Date.now()
+      const lastEmitTime = lastTypingEmitTime.current.get(timeoutKey) || 0
+
+      const emitTyping = () => {
+        messageSocket.emit('typing', {
+          chatId,
+          isTyping
+        })
+        lastTypingEmitTime.current.set(timeoutKey, now)
+      }
 
       if (isTyping) {
+        if (now - lastEmitTime >= typingThrottleTime) {
+          emitTyping()
+        }
+
         if (typingTimeouts.current.has(timeoutKey)) {
           clearTimeout(typingTimeouts.current.get(timeoutKey))
         }
 
         const timeout = setTimeout(() => {
-          socket.emit('typing', {
+          messageSocket.emit('typing', {
             chatId,
             isTyping: false
           })
           typingTimeouts.current.delete(timeoutKey)
+          lastTypingEmitTime.current.set(timeoutKey, Date.now())
         }, 5000)
 
         typingTimeouts.current.set(timeoutKey, timeout)
       } else {
+        emitTyping()
+
         if (typingTimeouts.current.has(timeoutKey)) {
           clearTimeout(typingTimeouts.current.get(timeoutKey))
           typingTimeouts.current.delete(timeoutKey)
         }
       }
     },
-    [socket, isConnected, chatId]
+    [messageSocket, isMessageConnected, chatId]
   )
 
   // Обновление статуса сообщения
   const updateMessageStatus = useCallback(
     (messageId: string, status: EnumMessageStatus) => {
-      if (!socket || !isConnected) return
+      if (!messageSocket || !isMessageConnected) return
 
-      socket.emit('message:status', {
+      messageSocket.emit('message:status', {
         messageId,
         status
       })
     },
-    [socket, isConnected]
+    [messageSocket, isMessageConnected]
   )
 
   // Отметка о прочтении
   const markAsRead = useCallback(
     (messageIds?: string[]) => {
-      if (!socket || !isConnected) return
+      if (!messageSocket || !isMessageConnected) return
 
-      socket.emit('messages:read', {
+      messageSocket.emit('messages:read', {
         chatId,
         messageIds
       })
+
+      queryClient.invalidateQueries({ queryKey: ['chats', 'list'] })
     },
-    [socket, isConnected, chatId]
+    [messageSocket, isMessageConnected, chatId]
   )
 
   useEffect(() => {
-    if (!socket || !isConnected || !chatId) return
+    if (!messageSocket || !isMessageConnected) return
 
     // Обработчик нового сообщения
     const handleNewMessage = (data: { message: Message; tempId?: string }) => {
@@ -202,27 +224,33 @@ export const useMessageSocket = ({
         addMessageToCache(data.message)
       }
 
-      updateChatInCache(chatId, {
-        lastMessage: data.message
-      })
+      // updateChatInCache(data.message.chatId, {
+      //   lastMessage: data.message
+      // })
+      queryClient.invalidateQueries({ queryKey: ['chats', 'list'] })
 
       onNewMessage?.(data.message)
     }
 
     const handleMessageUpdated = (updatedMessage: Message) => {
-      updateMessageInCache(updatedMessage.id, updatedMessage)
+      updateMessageInCache(
+        updatedMessage.chatId,
+        updatedMessage.id,
+        updatedMessage
+      )
 
       onMessageUpdated?.(updatedMessage)
     }
 
     // Обработчик удаления сообщения
     const handleMessageDeleted = (data: {
+      chatId: string
       messageId: string
       forEveryone: boolean
       deletedBy: string
     }) => {
       // Удаляем сообщение из кэша
-      removeMessageFromCache(data.messageId)
+      removeMessageFromCache(chatId, data.messageId)
 
       onMessageDeleted?.(data)
     }
@@ -234,7 +262,7 @@ export const useMessageSocket = ({
 
     // Обработчик статуса сообщения
     const handleMessageStatus = (data: MessageStatusEvent) => {
-      updateMessageInCache(data.messageId, {
+      updateMessageInCache(data.chatId, data.messageId, {
         statuses: {
           [data.userId]: data.status
         }
@@ -247,7 +275,7 @@ export const useMessageSocket = ({
     const handleReadReceipt = (data: ReadReceiptEvent) => {
       if (data.chatId === chatId && data.messages) {
         data.messages.forEach(msg => {
-          updateMessageInCache(msg.id, {
+          updateMessageInCache(data.chatId, msg.id, {
             statuses: {
               [msg.sender.id]: EnumMessageStatus.READ
             }
@@ -259,30 +287,29 @@ export const useMessageSocket = ({
     }
 
     // Подписка на события
-    socket.on('message:new', handleNewMessage)
-    socket.on('message:updated', handleMessageUpdated)
-    socket.on('message:deleted', handleMessageDeleted)
-    socket.on('typing', handleTyping)
-    socket.on('message:status:updated', handleMessageStatus)
-    socket.on('messages:read:updated', handleReadReceipt)
+    messageSocket.on('message:new', handleNewMessage)
+    messageSocket.on('message:updated', handleMessageUpdated)
+    messageSocket.on('message:deleted', handleMessageDeleted)
+    messageSocket.on('typing', handleTyping)
+    messageSocket.on('message:status:updated', handleMessageStatus)
+    messageSocket.on('messages:read:updated', handleReadReceipt)
 
     return () => {
       // Отписка от событий
-      socket.off('message:new', handleNewMessage)
-      socket.off('message:updated', handleMessageUpdated)
-      socket.off('message:deleted', handleMessageDeleted)
-      socket.off('typing', handleTyping)
-      socket.off('message:status:updated', handleMessageStatus)
-      socket.off('messages:read:updated', handleReadReceipt)
+      messageSocket.off('message:new', handleNewMessage)
+      messageSocket.off('message:updated', handleMessageUpdated)
+      messageSocket.off('message:deleted', handleMessageDeleted)
+      messageSocket.off('typing', handleTyping)
+      messageSocket.off('message:status:updated', handleMessageStatus)
+      messageSocket.off('messages:read:updated', handleReadReceipt)
 
       // Очистка таймаутов
       typingTimeouts.current.forEach(timeout => clearTimeout(timeout))
       typingTimeouts.current.clear()
     }
   }, [
-    socket,
-    isConnected,
-    chatId,
+    messageSocket,
+    isMessageConnected,
     queryClient,
     onNewMessage,
     onMessageUpdated,
@@ -300,7 +327,7 @@ export const useMessageSocket = ({
       sendTyping,
       updateMessageStatus,
       markAsRead,
-      isConnected
+      isMessageConnected
     }),
     [
       sendMessage,
@@ -309,7 +336,7 @@ export const useMessageSocket = ({
       sendTyping,
       updateMessageStatus,
       markAsRead,
-      isConnected
+      isMessageConnected
     ]
   )
 }

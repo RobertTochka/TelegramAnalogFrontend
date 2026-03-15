@@ -15,8 +15,6 @@ export const useUpdateChat = (chatId: string) => {
       api.put<Chat>(`/chats/${chatId}`, data).then(res => res.data),
     onSuccess: updatedChat => {
       queryClient.setQueryData(['chats', 'detail', chatId], updatedChat)
-      queryClient.invalidateQueries({ queryKey: ['chats', 'list'] })
-      toast.success('Чат обновлен')
     },
     onError: (error: any) => {
       toast.error(

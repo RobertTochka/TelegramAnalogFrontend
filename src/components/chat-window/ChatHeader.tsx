@@ -20,22 +20,38 @@ import { formatLastSeen } from '@/utils/format-last-seen'
 
 import { UserAvatar } from '../user/UserAvatar'
 
-import { ChatParticipant, EnumUserStatus, MessageFilter } from '@/types'
+import { ChatInfoModal } from './ChatInfoModal'
+import {
+  Chat,
+  ChatParticipant,
+  EnumChatType,
+  EnumUserStatus,
+  MessageFilter,
+  Profile
+} from '@/types'
 
 interface ChatHeaderProps {
+  currentUser: Profile
   typingUsers: Set<string>
+  chat: Chat
   participant: ChatParticipant
   onBack: () => void
   messagesQuery: Omit<MessageFilter, 'page'>
   setMessagesQuery: Dispatch<SetStateAction<Omit<MessageFilter, 'page'>>>
+  isInfoModalOpen: boolean
+  setIsInfoModalOpen: Dispatch<SetStateAction<boolean>>
 }
 
 export const ChatHeader = ({
+  currentUser,
   typingUsers,
+  chat,
   participant,
   onBack,
   messagesQuery,
-  setMessagesQuery
+  setMessagesQuery,
+  isInfoModalOpen,
+  setIsInfoModalOpen
 }: ChatHeaderProps) => {
   const [isMobile, setIsMobile] = useState(false)
   const [isOpenSearch, setIsOpenSearch] = useState(false)
@@ -52,9 +68,11 @@ export const ChatHeader = ({
   }, [])
 
   const formatOnline = (lastSeen: string) => {
-    if (participant.status === EnumUserStatus.ONLINE) return 'online'
+    if (participant.status === EnumUserStatus.ONLINE) return 'В сети'
     return formatLastSeen(lastSeen)
   }
+
+  const isDirect = chat.type === EnumChatType.DIRECT
 
   return (
     <div className='border-b border-white/5 bg-slate-900/50 px-4 py-2 backdrop-blur-sm'>
@@ -72,46 +90,66 @@ export const ChatHeader = ({
           )}
 
           {/* Аватар */}
-          <Link
-            className='relative shrink-0'
-            href={`profile/${participant.id}`}
-          >
-            <UserAvatar
-              avatar={participant.avatar}
-              firstName={participant.firstName}
-              status={participant.status}
-              userId={participant.id}
-            />
-          </Link>
+          {isDirect ? (
+            <Link
+              className='relative shrink-0'
+              href={`profile/${participant.id}`}
+            >
+              <UserAvatar
+                avatar={participant.avatar}
+                firstName={participant.firstName}
+                status={participant.status}
+              />
+            </Link>
+          ) : (
+            <button
+              className='cursor-pointer'
+              onClick={() => setIsInfoModalOpen(true)}
+            >
+              <UserAvatar
+                avatar={chat.avatar}
+                firstName={chat.name!}
+              />
+            </button>
+          )}
 
           {/* Информация о пользователе */}
-          <div className='min-w-0 flex-1'>
-            <h3 className='truncate font-medium text-white'>
-              {participant.firstName}
-            </h3>
-            <div className='flex items-center gap-1 text-xs'>
-              {typingUsers.size > 0 ? (
-                <div className='flex items-center gap-1 text-purple-400'>
-                  <span className='animate-pulse'>Печатает</span>
-                  <span className='flex gap-0.5'>
-                    <span className='animate-bounce'>.</span>
-                    <span className='animate-bounce delay-100'>.</span>
-                    <span className='animate-bounce delay-200'>.</span>
-                  </span>
-                </div>
-              ) : (
-                <span
-                  className={
-                    participant.status === EnumUserStatus.ONLINE
-                      ? 'text-green-400'
-                      : 'text-gray-400'
-                  }
-                >
-                  {formatOnline(participant.lastSeen)}
-                </span>
-              )}
+          <Link href={isDirect ? `profile/${participant.id}` : '#'}>
+            <div
+              className='min-w-0 flex-1'
+              onClick={() => {
+                if (!isDirect) setIsInfoModalOpen(true)
+              }}
+            >
+              <h3 className='truncate font-medium text-white'>
+                {isDirect ? participant.firstName : chat.name!}
+              </h3>
+              <div className='flex items-center gap-1 text-xs'>
+                {typingUsers.size > 0 ? (
+                  <div className='flex items-center gap-1 text-purple-400'>
+                    <span className='animate-pulse'>Печатает</span>
+                    <span className='flex gap-0.5'>
+                      <span className='animate-bounce'>.</span>
+                      <span className='animate-bounce delay-100'>.</span>
+                      <span className='animate-bounce delay-200'>.</span>
+                    </span>
+                  </div>
+                ) : (
+                  isDirect && (
+                    <span
+                      className={
+                        participant.status === EnumUserStatus.ONLINE
+                          ? 'text-green-400'
+                          : 'text-gray-400'
+                      }
+                    >
+                      {formatOnline(participant.lastSeen)}
+                    </span>
+                  )
+                )}
+              </div>
             </div>
-          </div>
+          </Link>
         </div>
 
         {/* Правая часть с действиями */}
@@ -141,9 +179,14 @@ export const ChatHeader = ({
               align='end'
               className='w-48 border-white/5 bg-slate-900 text-white'
             >
-              <DropdownMenuItem className='cursor-pointer hover:bg-slate-800'>
-                Информация о чате
-              </DropdownMenuItem>
+              {!isDirect && (
+                <DropdownMenuItem
+                  onClick={() => setIsInfoModalOpen(true)}
+                  className='cursor-pointer hover:bg-slate-800'
+                >
+                  Информация о чате
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem
                 className='cursor-pointer hover:bg-slate-800'
                 onClick={() => setIsOpenSearch(true)}
@@ -181,6 +224,30 @@ export const ChatHeader = ({
           </button>
         </div>
       )}
+
+      <ChatInfoModal
+        chat={chat}
+        currentUser={currentUser}
+        onBack={onBack}
+        open={isInfoModalOpen}
+        onOpenChange={setIsInfoModalOpen}
+        onLeaveChat={() => {
+          // Логика выхода из чата
+          console.log('Leave chat')
+        }}
+        onMakePrivate={() => {
+          // Логика изменения приватности
+          console.log('Make private/public')
+        }}
+        onAddAdmin={participantId => {
+          // Логика добавления админа
+          console.log('Add admin', participantId)
+        }}
+        onRemoveParticipant={participantId => {
+          // Логика удаления участника
+          console.log('Remove participant', participantId)
+        }}
+      />
     </div>
   )
 }

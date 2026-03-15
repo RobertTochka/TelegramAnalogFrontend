@@ -41,6 +41,7 @@ export interface TypingEvent {
 }
 
 export interface MessageStatusEvent {
+  chatId: string
   messageId: string
   status: EnumMessageStatus
   userId: string

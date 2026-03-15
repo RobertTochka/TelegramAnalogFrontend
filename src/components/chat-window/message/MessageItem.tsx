@@ -114,12 +114,12 @@ export const MessageItem = ({
                   asChild
                   disabled={message.isSystem}
                 >
-                  {/* clickable area = bubble size */}
                   <div className='inline-block cursor-pointer'>
                     <MessageBubble
                       currentUserId={currentUserId}
                       isOwn={isOwn}
                       message={message}
+                      showAvatar={showAvatar}
                     />
                   </div>
                 </DropdownMenuTrigger>

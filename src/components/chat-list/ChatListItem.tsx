@@ -1,26 +1,35 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { BellOff, Pin, Users } from 'lucide-react'
+import Link from 'next/link'
+import { Dispatch, SetStateAction } from 'react'
+
+import { api } from '@/api/api'
 
 import { Avatar, AvatarFallback, AvatarImage, Badge } from '@/components/ui'
 
 import { getInitials } from '@/utils/functions'
+
+import { UserAvatar } from '../user/UserAvatar'
 
 import { Chat, EnumChatType } from '@/types'
 
 interface ChatListItemProps {
   chat: Chat
   selectedChatId: string
+  setSelectedChatId: Dispatch<SetStateAction<string>>
   currentUserId: string
-  onSelectChat?: (chatId: string) => void
-  markChatAsRead?: (chatId: string) => void
 }
+
+const lastPrefetch = new Map<string, number>()
 
 export const ChatListItem = ({
   chat,
   selectedChatId,
-  currentUserId,
-  onSelectChat,
-  markChatAsRead
+  setSelectedChatId,
+  currentUserId
 }: ChatListItemProps) => {
+  const queryClient = useQueryClient()
+
   const getChatName = () => {
     if (chat.type === EnumChatType.DIRECT) {
       const otherParticipant = chat.participants?.find(
@@ -83,12 +92,43 @@ export const ChatListItem = ({
   }
 
   const handleSelectChat = (chatId: string) => {
-    markChatAsRead?.(chatId)
-    onSelectChat?.(chatId)
+    if (selectedChatId === chatId) return
+
+    setSelectedChatId(chatId)
+  }
+
+  const handlePrefetchChat = (chatId: string) => {
+    if (selectedChatId === chatId) return
+
+    const last = lastPrefetch.get(chatId) ?? 0
+    if (Date.now() - last < 30_000) return
+    lastPrefetch.set(chatId, Date.now())
+
+    if (queryClient.getQueryData(['chats', 'detail', chatId])) return
+    const state = queryClient.getQueryState(['chats', 'detail', chatId])
+    if (state?.status === 'pending') return
+
+    queryClient.prefetchQuery({
+      queryKey: ['chats', 'detail', chatId],
+      queryFn: () => api.get(`/chats/${chatId}`).then(res => res.data)
+    })
+
+    queryClient.prefetchQuery({
+      queryKey: ['messages', 'list', chatId],
+      queryFn: () => api.get(`/messages/${chatId}?limit=40`).then(r => r.data)
+    })
+  }
+
+  const getStatus = () => {
+    if (chat.type !== EnumChatType.DIRECT) return undefined
+
+    const participants = chat.participants.filter(p => p.id !== currentUserId)
+    return participants[0].status
   }
 
   return (
     <button
+      onMouseEnter={() => handlePrefetchChat(chat.id)}
       onClick={() => handleSelectChat(chat.id)}
       className={`relative w-full overflow-hidden transition-all duration-200 before:absolute before:inset-0 before:bg-linear-to-r before:from-purple-600/0 before:to-blue-600/0 before:opacity-0 before:transition-opacity hover:before:opacity-10 ${
         selectedChatId === chat.id
@@ -98,12 +138,11 @@ export const ChatListItem = ({
     >
       <div className='relative flex items-start space-x-3 p-4'>
         {/* Аватар */}
-        <Avatar className='h-10 w-10 ring-2 ring-white/10'>
-          <AvatarImage src={getChatAvatar()} />
-          <AvatarFallback className='bg-linear-to-r from-purple-600 to-blue-600 text-sm text-white'>
-            {getInitials(getChatName())}
-          </AvatarFallback>
-        </Avatar>
+        <UserAvatar
+          avatar={getChatAvatar()}
+          firstName={getChatName()}
+          status={getStatus()}
+        />
 
         {/* Информация о чате */}
         <div className='min-w-0 flex-1'>
@@ -129,7 +168,7 @@ export const ChatListItem = ({
           </div>
         </div>
 
-        {chat.unreadCount && chat.unreadCount > 0 && (
+        {chat.unreadCount !== undefined && chat.unreadCount > 0 && (
           <div className='absolute right-2 bottom-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-xs font-medium text-white shadow-lg'>
             {chat.unreadCount > 99 ? '99+' : chat.unreadCount}
           </div>

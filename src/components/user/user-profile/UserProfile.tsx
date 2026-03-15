@@ -174,7 +174,6 @@ export default function UserProfile() {
               <UserAvatar
                 avatar={user.avatar}
                 firstName={user.firstName}
-                status={user.status}
                 className='absolute -top-18 left-1/2 h-32 w-32 -translate-x-1/2 border-4 border-slate-800'
                 textSize='text-4xl'
               />

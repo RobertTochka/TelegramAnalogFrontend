@@ -10,7 +10,7 @@ export interface Chat {
   createdById: string
   createdBy?: ChatParticipant
   isPrivate: boolean
-  inviteLink?: string
+  inviteLink?: InviteLinkDto
   participants: ChatParticipant[]
   lastMessage?: Message
   pinnedMessage?: Message
@@ -53,6 +53,11 @@ export interface CreateChatDto {
   participantIds: string[]
   isPrivate?: boolean
   avatar?: string
+}
+
+export interface InviteLinkDto {
+  link: string
+  expiresAt: Date
 }
 
 export enum EnumChatType {

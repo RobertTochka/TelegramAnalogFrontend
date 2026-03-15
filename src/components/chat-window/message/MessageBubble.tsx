@@ -1,4 +1,15 @@
-import { Check, CheckCheck, CornerUpRight, Forward } from 'lucide-react'
+import {
+  Check,
+  CheckCheck,
+  CircleAlert,
+  CornerUpRight,
+  FileWarning,
+  FileWarningIcon,
+  Forward,
+  LucideMessageCircleWarning,
+  MailWarning,
+  MessageCircleWarning
+} from 'lucide-react'
 
 import { formatLongWords, formatMessageTime } from '@/utils/functions'
 
@@ -8,12 +19,14 @@ interface MessageBubbleProps {
   isOwn: boolean
   currentUserId: string
   message: Message
+  showAvatar: boolean
 }
 
 export const MessageBubble = ({
   isOwn,
   currentUserId,
-  message
+  message,
+  showAvatar
 }: MessageBubbleProps) => {
   const getMessageStatusIcon = () => {
     if (!isOwn) return null
@@ -24,21 +37,23 @@ export const MessageBubble = ({
       return <CheckCheck className='h-3 w-3 text-blue-400' />
     }
     if (status === EnumMessageStatus.DELIVERED) {
-      return <CheckCheck className='h-3 w-3 text-gray-500' />
+      return <CheckCheck className='h-3 w-3 text-gray-300' />
     }
     if (status === EnumMessageStatus.SENT) {
-      return <Check className='h-3 w-3 text-gray-500' />
+      return <Check className='h-3 w-3 text-gray-300' />
     }
-    if (status === EnumMessageStatus.FAILED) return <div>failed</div>
-    return <div>ХУЙНЯ</div>
+    if (status === EnumMessageStatus.FAILED)
+      return <CircleAlert className='h-3 w-3 text-red-500' />
+  }
+
+  const getMargin = () => {
+    if (isOwn) return 'items-end mr-10'
+    if (!isOwn && showAvatar) return 'items-start'
+    if (!isOwn && !showAvatar) return 'items-start ml-10'
   }
 
   return (
-    <div
-      className={`group relative max-w-full ${
-        isOwn ? 'items-end' : 'items-start'
-      }`}
-    >
+    <div className={`group relative max-w-full ${getMargin()}`}>
       {/* Блок сообщения */}
       <div
         className={`relative rounded-2xl px-4 py-2 wrap-break-word ${

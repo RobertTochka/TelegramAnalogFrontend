@@ -10,7 +10,9 @@ export const useAddAdmin = (chatId: string) => {
   const { mutate: addAdmin, isPending: isLoadingAddAdmin } = useMutation({
     mutationKey: ['add admin'],
     mutationFn: (adminId: string) =>
-      api.post(`/chats/${chatId}/admins`, adminId).then(res => res.data),
+      api
+        .post(`/chats/${chatId}/admins`, { newAdminId: adminId })
+        .then(res => res.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chats', 'detail', chatId] })
       toast.success('Администратор добавлен')

@@ -1,3 +1,5 @@
+'use client'
+
 import { useQuery } from '@tanstack/react-query'
 import { useParams } from 'next/navigation'
 import { useMemo } from 'react'
@@ -14,7 +16,7 @@ export const useGetUser = () => {
     isLoading: isLoadingUser,
     error: userError
   } = useQuery({
-    queryKey: ['user'],
+    queryKey: ['user', params.userId],
     queryFn: () =>
       api.get<User>(`/users/profile/${params.userId}`).then(res => res.data)
   })

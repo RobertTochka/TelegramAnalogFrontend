@@ -1,6 +1,6 @@
 'use client'
 
-import { Loader2 } from 'lucide-react'
+import { Loader2, MessageCircle } from 'lucide-react'
 import {
   Dispatch,
   SetStateAction,
@@ -14,6 +14,7 @@ import { MessageItem } from './message/MessageItem'
 import { Message, Profile } from '@/types'
 
 interface ChatWindowProps {
+  chatId: string
   currentUser: Profile
   typingUsers: Set<string>
   messages: Message[]
@@ -30,6 +31,7 @@ interface ChatWindowProps {
 }
 
 export const ChatWindow = ({
+  chatId,
   currentUser,
   typingUsers,
   messages,
@@ -49,14 +51,21 @@ export const ChatWindow = ({
   const prevScrollHeightRef = useRef<number>(0)
   const isInitialLoad = useRef(true)
 
+  useLayoutEffect(() => {
+    prevScrollHeightRef.current = 0
+    isInitialLoad.current = true
+
+    if (messages.length > 0) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'auto' })
+      isInitialLoad.current = false
+    }
+  }, [chatId])
+
   useEffect(() => {
     if (isInitialLoad.current && messages.length > 0) {
       messagesEndRef.current?.scrollIntoView()
       isInitialLoad.current = false
     }
-  }, [messages])
-
-  useEffect(() => {
     if (messagesContainerRef.current) {
       const { scrollHeight, clientHeight, scrollTop } =
         messagesContainerRef.current
@@ -117,7 +126,7 @@ export const ChatWindow = ({
           </div>
         )}
 
-        {!isEmpty &&
+        {!isEmpty ? (
           messages.map((message, index) => (
             <MessageItem
               key={message.id}
@@ -135,7 +144,20 @@ export const ChatWindow = ({
               setReplyTo={setReplyTo}
               setForwardedFrom={setForwardedFrom}
             />
-          ))}
+          ))
+        ) : (
+          <div className='mt-10 flex h-full flex-col items-center justify-center text-center'>
+            <div className='relative mb-6'>
+              <div className='absolute inset-0 animate-pulse rounded-full bg-linear-to-r from-purple-600/20 to-blue-600/20 blur-xl' />
+              <div className='relative rounded-full bg-linear-to-r from-purple-600 to-blue-600 p-4'>
+                <MessageCircle className='h-12 w-12 text-white' />
+              </div>
+            </div>
+            <h3 className='mb-2 text-xl font-semibold text-white'>
+              Начните общение, написав первое сообщение
+            </h3>
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
     </div>

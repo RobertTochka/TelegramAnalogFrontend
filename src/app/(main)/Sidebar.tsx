@@ -4,7 +4,8 @@ import { MessageCircle } from 'lucide-react'
 import Link from 'next/link'
 import { Dispatch, SetStateAction } from 'react'
 
-import { ChatList } from '@/components/chat-list'
+import { ChatList, CreateChatDialog } from '@/components/chat-list'
+import { Button } from '@/components/ui'
 import { UserAvatar } from '@/components/user/UserAvatar'
 
 import { APP_NAME } from '@/constants'
@@ -50,8 +51,6 @@ export const Sidebar = ({
           <UserAvatar
             avatar={currentUser.avatar}
             firstName={currentUser.firstName}
-            status={currentUser.status}
-            userId={currentUser.id}
           />
         </Link>
       </div>
@@ -59,12 +58,23 @@ export const Sidebar = ({
       <ChatList
         currentUserId={currentUser.id}
         selectedChatId={selectedChatId}
-        onSelectChat={setSelectedChatId}
+        setSelectedChatId={setSelectedChatId}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         chatsQuery={chatsQuery}
         setChatsQuery={setChatsQuery}
       />
+
+      <div className='border-t border-white/5 p-4'>
+        <CreateChatDialog
+          onCreated={id => setSelectedChatId(id)}
+          trigger={
+            <Button className='relative w-full overflow-hidden bg-linear-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700'>
+              Новый чат
+            </Button>
+          }
+        />
+      </div>
     </div>
   )
 }

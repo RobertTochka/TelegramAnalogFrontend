@@ -8,9 +8,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui'
 import { EnumUserStatus } from '@/types'
 
 interface UserAvatarProps {
-  avatar: string
+  avatar: string | undefined
   firstName: string
-  status: EnumUserStatus
+  status?: EnumUserStatus
   className?: string
   textSize?: string
 }
@@ -23,7 +23,7 @@ export const UserAvatar = ({
   textSize
 }: UserAvatarProps) => {
   return (
-    <>
+    <div className='relative'>
       <Avatar className={cn('h-10 w-10 ring-2 ring-white/10', className)}>
         <AvatarImage src={avatar} />
         <AvatarFallback
@@ -32,14 +32,14 @@ export const UserAvatar = ({
             textSize
           )}
         >
-          {getInitials(firstName)}
+          {firstName && getInitials(firstName)}
         </AvatarFallback>
       </Avatar>
 
       {/* Индикатор онлайн */}
-      {status === EnumUserStatus.ONLINE && (
+      {status && status === EnumUserStatus.ONLINE && (
         <span className='absolute right-0 bottom-0 h-3 w-3 rounded-full bg-green-500 ring-2 ring-slate-900' />
       )}
-    </>
+    </div>
   )
 }

@@ -1,10 +1,17 @@
 'use client'
 
 import { Loader2 } from 'lucide-react'
-import { Dispatch, FC, SetStateAction, useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
+import {
+  Dispatch,
+  FC,
+  SetStateAction,
+  useEffect,
+  useMemo,
+  useState
+} from 'react'
 
 import { useGetOneChat } from '@/api/hooks/chat'
-import { useGetMessages } from '@/api/hooks/messages'
 
 import { ChatHeader } from './ChatHeader'
 import { ChatWindow } from './ChatWindow'
@@ -14,72 +21,94 @@ import { ForwardDialog } from './message/ForwardDialog'
 import { ReplyBanner } from './message/ReplyBanner'
 import {
   ChatFilter,
+  CreateMessageDto,
   EnumMessageStatus,
   Message,
   MessageFilter,
+  MessageSenderDto,
   Profile
 } from '@/types'
-import { useMessageSocket } from '@/web-socket/hooks'
 
 interface ChatContainerProps {
+  isEmpty: boolean
+  isFetchingNextPage: boolean
+  hasNextPage: boolean
+  isLoading: boolean
   chatId: string
+  messages: Message[]
+  typingUsers: Set<string>
   currentUser: Profile
-  setSelectedChatId: Dispatch<SetStateAction<string>>
   chatsQuery: ChatFilter
+  messagesQuery: Omit<MessageFilter, 'page'>
+  setMessagesQuery: Dispatch<SetStateAction<Omit<MessageFilter, 'page'>>>
+  setSelectedChatId: Dispatch<SetStateAction<string>>
+  fetchNextPage: () => void
+  markAsRead: (messageIds?: string[] | undefined) => void
+  sendTyping: (isTyping: boolean) => void
+  deleteMessage: (messageId: string, forEveryone?: boolean) => void
+  editMessage: (messageId: string, content: string) => void
+  sendMessage: (
+    data: CreateMessageDto,
+    sender: MessageSenderDto,
+    replyTo?: Message,
+    forwardedFrom?: Message
+  ) => void
 }
 
 export const ChatContainer: FC<ChatContainerProps> = ({
+  isEmpty,
+  isFetchingNextPage,
+  hasNextPage,
+  isLoading,
   chatId,
+  messages,
+  typingUsers,
   currentUser,
+  chatsQuery,
+  messagesQuery,
+  setMessagesQuery,
   setSelectedChatId,
-  chatsQuery
+  fetchNextPage,
+  markAsRead,
+  sendTyping,
+  deleteMessage,
+  editMessage,
+  sendMessage
 }) => {
+  const searchParams = useSearchParams()
   const [messageText, setMessageText] = useState('')
   const [editingId, setEditingId] = useState('')
   const [editing, setEditing] = useState(false)
   const [editedText, setEditedText] = useState('')
-  const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set())
   const [attachedFiles, setAttachedFiles] = useState<File[]>([])
   const [replyTo, setReplyTo] = useState<Message | undefined>(undefined)
+  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false)
   const [forwardedFrom, setForwardedFrom] = useState<Message | undefined>(
     undefined
   )
-  const [filteredMessages, setFilteredMessages] = useState<Message[]>([])
-  const [messagesQuery, setMessagesQuery] = useState<
-    Omit<MessageFilter, 'page'>
-  >({
-    limit: 40
-  })
 
   const { chat, isLoadingChat } = useGetOneChat(chatId)
 
-  const {
-    messages,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isLoading,
-    isEmpty
-  } = useGetMessages(chatId, messagesQuery)
+  const filteredMessages = useMemo(() => {
+    if (!messagesQuery.search) return messages
 
-  const { sendMessage, editMessage, deleteMessage, sendTyping, markAsRead } =
-    useMessageSocket({
-      currentUserId: currentUser.id,
-      messagesQuery,
-      chatsQuery,
-      chatId,
-      onTyping: data => {
-        setTypingUsers(prev => {
-          const newSet = new Set(prev)
-          if (data.isTyping) {
-            newSet.add(data.userId)
-          } else {
-            newSet.delete(data.userId)
-          }
-          return newSet
-        })
-      }
+    return messages.filter(message => {
+      return message.content
+        ?.toLowerCase()
+        .includes(messagesQuery.search!.toLowerCase())
     })
+  }, [messages, messagesQuery.search])
+
+  useEffect(() => {
+    const chatIdFromQuery = searchParams.get('chatId')
+
+    if (chatIdFromQuery) {
+      setSelectedChatId(chatIdFromQuery)
+
+      const newUrl = window.location.pathname
+      window.history.replaceState({}, '', newUrl)
+    }
+  }, [searchParams])
 
   useEffect(() => {
     if (chatId && messages.length > 0) {
@@ -90,23 +119,9 @@ export const ChatContainer: FC<ChatContainerProps> = ({
         )
         .map(msg => msg.id)
 
-      if (unreadMessages.length > 0) {
-        markAsRead(unreadMessages)
-      }
+      markAsRead(unreadMessages)
     }
   }, [chatId, messages, currentUser.id, markAsRead])
-
-  useEffect(() => {
-    const search = messagesQuery.search
-    if (search) {
-      const filtered = messages.filter(message => {
-        return message.content?.toLowerCase().includes(search.toLowerCase())
-      })
-      setFilteredMessages(filtered)
-    } else {
-      setFilteredMessages(messages)
-    }
-  }, [messages, messagesQuery.search])
 
   const removeFile = (index: number) => {
     setAttachedFiles(prev => prev.filter((_, i) => i !== index))
@@ -138,7 +153,10 @@ export const ChatContainer: FC<ChatContainerProps> = ({
     sendTyping(false)
   }
 
-  if (isLoading || isLoadingChat) {
+  const isInitialLoading =
+    (!chat && isLoadingChat) || (messages.length === 0 && isLoading)
+
+  if (isInitialLoading) {
     return (
       <div className='flex h-full items-center justify-center'>
         <div className='relative'>
@@ -149,17 +167,30 @@ export const ChatContainer: FC<ChatContainerProps> = ({
     )
   }
 
+  if (!chat) {
+    return (
+      <div className='flex h-full items-center justify-center'>
+        <div className='relative'>Такого чата не существует</div>
+      </div>
+    )
+  }
+
   return (
     <div className='flex h-full flex-col'>
       <ChatHeader
+        currentUser={currentUser}
         typingUsers={typingUsers}
-        participant={chat?.participants.find(p => p.id !== currentUser.id)!}
+        chat={chat}
+        participant={chat.participants?.find(p => p.id !== currentUser.id)!}
         onBack={() => setSelectedChatId('')}
         messagesQuery={messagesQuery}
         setMessagesQuery={setMessagesQuery}
+        isInfoModalOpen={isInfoModalOpen}
+        setIsInfoModalOpen={setIsInfoModalOpen}
       />
 
       <ChatWindow
+        chatId={chatId}
         currentUser={currentUser}
         typingUsers={typingUsers}
         messages={filteredMessages}

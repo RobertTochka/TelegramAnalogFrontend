@@ -11,7 +11,7 @@ export const useAddParticipants = (chatId: string) => {
     mutationKey: ['add participants', chatId],
     mutationFn: (participantIds: string[]) =>
       api
-        .post(`/chats/${chatId}/participants`, { participantIds })
+        .put(`/chats/${chatId}/participants`, { participantIds })
         .then(res => res.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chats', 'detail', chatId] })

@@ -13,7 +13,6 @@ import {
 import toast from 'react-hot-toast'
 
 import { useGetChats } from '@/api/hooks/chat'
-import { useMarkAsRead } from '@/api/hooks/chat/use-mark-as-read'
 
 import { Button, ScrollArea } from '@/components/ui'
 
@@ -26,7 +25,7 @@ import { useChatSocket } from '@/web-socket/hooks/use-chat-socket'
 interface ChatListProps {
   currentUserId: string
   selectedChatId: string
-  onSelectChat?: (chatId: string) => void
+  setSelectedChatId: Dispatch<SetStateAction<string>>
   searchQuery: string
   chatsQuery: ChatFilter
   setChatsQuery: Dispatch<SetStateAction<ChatFilter>>
@@ -36,7 +35,7 @@ interface ChatListProps {
 export const ChatList: FC<ChatListProps> = ({
   currentUserId,
   selectedChatId,
-  onSelectChat,
+  setSelectedChatId,
   searchQuery,
   setSearchQuery,
   chatsQuery,
@@ -54,8 +53,6 @@ export const ChatList: FC<ChatListProps> = ({
     isEmpty
   } = useGetChats(chatsQuery)
 
-  const { markChatAsRead, isLoadingMarkChatAsRead } = useMarkAsRead()
-
   useChatSocket({
     chatsQuery,
     onNewChat: data => {
@@ -63,7 +60,7 @@ export const ChatList: FC<ChatListProps> = ({
     },
     onChatDeleted: data => {
       if (selectedChatId === data.chatId) {
-        onSelectChat?.('')
+        setSelectedChatId('')
       }
       toast.error('Чат был удален')
     },
@@ -72,7 +69,7 @@ export const ChatList: FC<ChatListProps> = ({
     },
     onChatRemoved: data => {
       if (selectedChatId === data.chatId) {
-        onSelectChat?.('')
+        setSelectedChatId('')
       }
       toast.error('Вас удалили из чата')
     },
@@ -118,11 +115,7 @@ export const ChatList: FC<ChatListProps> = ({
     [hasNextPage, isFetchingNextPage, fetchNextPage]
   )
 
-  const handleMarkAsRead = (chatId: string) => {
-    markChatAsRead(chatId)
-  }
-
-  if (isLoading || isLoadingMarkChatAsRead) {
+  if (isLoading) {
     return <ChatListLoading />
   }
 
@@ -157,9 +150,8 @@ export const ChatList: FC<ChatListProps> = ({
                 key={chat.id}
                 chat={chat}
                 selectedChatId={selectedChatId}
+                setSelectedChatId={setSelectedChatId}
                 currentUserId={currentUserId}
-                onSelectChat={onSelectChat}
-                markChatAsRead={handleMarkAsRead}
               />
             ))}
 
@@ -184,16 +176,6 @@ export const ChatList: FC<ChatListProps> = ({
           </div>
         )}
       </ScrollArea>
-
-      {/* Кнопка создания нового чата */}
-      <div className='border-t border-white/5 p-4'>
-        <Button
-          className='relative w-full overflow-hidden bg-linear-to-r from-purple-600 to-blue-600 text-white transition-all hover:from-purple-700 hover:to-blue-700 hover:shadow-lg hover:shadow-purple-500/25'
-          onClick={() => {}}
-        >
-          Новый чат
-        </Button>
-      </div>
     </div>
   )
 }

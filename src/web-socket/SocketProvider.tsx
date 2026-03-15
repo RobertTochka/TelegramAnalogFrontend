@@ -13,56 +13,86 @@ import { io, Socket } from 'socket.io-client'
 import { SERVER_URL } from '@/constants'
 
 interface SocketContextType {
-  socket: Socket | null
-  isConnected: boolean
+  chatSocket: Socket | null
+  messageSocket: Socket | null
+  statusSocket: Socket | null
+  isChatConnected: boolean
+  isMessageConnected: boolean
+  isStatusConnected: boolean
 }
 
 const SocketContext = createContext<SocketContextType>({
-  socket: null,
-  isConnected: false
+  chatSocket: null,
+  messageSocket: null,
+  statusSocket: null,
+  isChatConnected: false,
+  isMessageConnected: false,
+  isStatusConnected: false
 })
 
 export const useSocket = () => useContext(SocketContext)
 
-const SOCKET_URL = `${SERVER_URL}/messages`
+const CHAT_SOCKET_URL = `${SERVER_URL}/chats`
+const MESSAGE_SOCKET_URL = `${SERVER_URL}/messages`
+const USER_SOCKET_URL = `${SERVER_URL}/user`
 
 export const SocketProvider: FC<{ children: ReactNode }> = ({ children }) => {
-  const [socket, setSocket] = useState<Socket | null>(null)
-  const [isConnected, setIsConnected] = useState(false)
+  const [chatSocket, setChatSocket] = useState<Socket | null>(null)
+  const [messageSocket, setMessageSocket] = useState<Socket | null>(null)
+  const [statusSocket, setStatusSocket] = useState<Socket | null>(null)
+
+  const [isChatConnected, setIsChatConnected] = useState(false)
+  const [isMessageConnected, setIsMessageConnected] = useState(false)
+  const [isStatusConnected, setIsStatusConnected] = useState(false)
 
   useEffect(() => {
-    const socketInstance = io(SOCKET_URL, {
+    const socketConfig = {
       withCredentials: true,
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000
-    })
+    }
 
-    socketInstance.on('connect', () => {
-      console.log('Socket connected')
-      setIsConnected(true)
-    })
+    // Подключение к разным namespace
+    const chatInstance = io(CHAT_SOCKET_URL, socketConfig)
+    const messageInstance = io(MESSAGE_SOCKET_URL, socketConfig)
+    const statusInstance = io(USER_SOCKET_URL, socketConfig)
 
-    socketInstance.on('disconnect', () => {
-      console.log('Socket disconnected')
-      setIsConnected(false)
-    })
+    // Обработчики для chat socket
+    chatInstance.on('connect', () => setIsChatConnected(true))
+    chatInstance.on('disconnect', () => setIsChatConnected(false))
 
-    socketInstance.on('connect_error', error => {
-      console.error('Socket connection error:', error)
-      setIsConnected(false)
-    })
+    // Обработчики для message socket
+    messageInstance.on('connect', () => setIsMessageConnected(true))
+    messageInstance.on('disconnect', () => setIsMessageConnected(false))
 
-    setSocket(socketInstance)
+    // Обработчики для status socket
+    statusInstance.on('connect', () => setIsStatusConnected(true))
+    statusInstance.on('disconnect', () => setIsStatusConnected(false))
+
+    setChatSocket(chatInstance)
+    setMessageSocket(messageInstance)
+    setStatusSocket(statusInstance)
 
     return () => {
-      socketInstance.disconnect()
+      chatInstance.disconnect()
+      messageInstance.disconnect()
+      statusInstance.disconnect()
     }
   }, [])
 
   return (
-    <SocketContext.Provider value={{ socket, isConnected }}>
+    <SocketContext.Provider
+      value={{
+        chatSocket,
+        messageSocket,
+        statusSocket,
+        isChatConnected,
+        isMessageConnected,
+        isStatusConnected
+      }}
+    >
       {children}
     </SocketContext.Provider>
   )

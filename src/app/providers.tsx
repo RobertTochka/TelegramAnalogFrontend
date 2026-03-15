@@ -6,6 +6,7 @@ import { Toaster } from 'react-hot-toast'
 
 import { TooltipProvider } from '@/components/ui'
 
+import { UserStatusProvider } from '@/contexts/UserStatusContext'
 import { SocketProvider } from '@/web-socket/SocketProvider'
 
 export function Providers({ children }: PropsWithChildren) {
@@ -23,8 +24,10 @@ export function Providers({ children }: PropsWithChildren) {
   return (
     <SocketProvider>
       <QueryClientProvider client={client}>
-        <TooltipProvider>{children}</TooltipProvider>
-        <Toaster />
+        <UserStatusProvider>
+          <TooltipProvider>{children}</TooltipProvider>
+          <Toaster />
+        </UserStatusProvider>
       </QueryClientProvider>
     </SocketProvider>
   )

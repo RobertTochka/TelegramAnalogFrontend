@@ -12,7 +12,7 @@ export const useRemoveParticipants = (chatId: string) => {
       mutationKey: ['remove participants', chatId],
       mutationFn: (participantIds: string[]) =>
         api
-          .delete(`/chats/${chatId}/participants`, { data: { participantIds } })
+          .post(`/chats/${chatId}/participants`, { participantIds })
           .then(res => res.data),
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['chats', 'detail', chatId] })

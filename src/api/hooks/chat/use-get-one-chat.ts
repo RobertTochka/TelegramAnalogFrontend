@@ -3,7 +3,7 @@ import { useMemo } from 'react'
 
 import { api } from '@/api/api'
 
-import { Chat, PaginatedResponse } from '@/types'
+import { Chat } from '@/types'
 
 export const useGetOneChat = (id: string) => {
   const queryClient = useQueryClient()
@@ -15,15 +15,28 @@ export const useGetOneChat = (id: string) => {
   } = useQuery({
     queryKey: ['chats', 'detail', id],
     queryFn: () => api.get<Chat>(`/chats/${id}`).then(res => res.data),
-    enabled: !!id,
     initialData: () => {
-      const chats = queryClient.getQueryData<PaginatedResponse<Chat[]>>([
-        'chats',
-        'list'
-      ])
-      return chats?.data?.find(c => c.id === id)
+      const queries = queryClient.getQueriesData({
+        queryKey: ['chats', 'list']
+      })
+
+      for (const [, data] of queries) {
+        const infinite = data as any
+        if (!infinite?.pages) continue
+
+        for (const page of infinite.pages) {
+          const found: Chat = page.data?.find((c: Chat) => c.id === id)
+          if (found) return found
+        }
+      }
+
+      return undefined
     },
-    staleTime: 1000 * 60 * 1
+    enabled: !!id,
+    staleTime: Infinity,
+    gcTime: 1000 * 60 * 60,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false
   })
 
   return useMemo(

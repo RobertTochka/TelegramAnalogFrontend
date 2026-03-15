@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo } from 'react'
 import toast from 'react-hot-toast'
 
 import { useGetChats } from '@/api/hooks/chat'
+import { useGetProfile } from '@/api/hooks/users'
 
 import { useSocket } from '../SocketProvider'
 
@@ -11,22 +12,9 @@ import { Chat, ChatFilter } from '@/types'
 interface UseChatSocketProps {
   chatsQuery: ChatFilter
   onNewChat?: (data: { chatId: string; chat: Chat; message: string }) => void
-  onChatDeleted?: (data: {
-    chatId: string
-    deletedBy: string
-    message: string
-  }) => void
-  onChatAdded?: (data: {
-    chatId: string
-    chat: Chat
-    addedBy: string
-    message: string
-  }) => void
-  onChatRemoved?: (data: {
-    chatId: string
-    removedBy: string
-    message: string
-  }) => void
+  onChatDeleted?: (data: { chatId: string; message: string }) => void
+  onChatAdded?: (data: { chatId: string; chat: Chat; message: string }) => void
+  onChatRemoved?: (data: { chatId: string; message: string }) => void
   onParticipantJoined?: (data: {
     chatId: string
     userId: string
@@ -48,82 +36,88 @@ export const useChatSocket = ({
   onParticipantJoined,
   onParticipantLeft
 }: UseChatSocketProps) => {
-  const { socket, isConnected } = useSocket()
+  const { chatSocket, isChatConnected } = useSocket()
   const queryClient = useQueryClient()
   const { addChatToCache, updateChatParticipantsInCache, removeChatFromCache } =
     useGetChats(chatsQuery)
+  // TODO: убрать заглушку
+  const { profile } = useGetProfile()
 
   // Создание чата
   const createChat = useCallback(
     (data: { participantIds: string[]; type?: string; name?: string }) => {
-      if (!socket || !isConnected) {
+      if (!chatSocket || !isChatConnected) {
         toast.error('Нет подключения к серверу')
         return
       }
 
-      socket.emit('chat:create', data)
+      chatSocket.emit('chat:create', data)
     },
-    [socket, isConnected]
+    [chatSocket, isChatConnected]
   )
 
   // Удаление чата
   const deleteChat = useCallback(
     (chatId: string) => {
-      if (!socket || !isConnected) return
+      if (!chatSocket || !isChatConnected) return
 
-      socket.emit('chat:delete', { chatId })
+      chatSocket.emit('chat:delete', { chatId })
     },
-    [socket, isConnected]
+    [chatSocket, isChatConnected]
   )
 
   // Добавление участников
   const addParticipants = useCallback(
     (chatId: string, participantIds: string[]) => {
-      if (!socket || !isConnected) return
+      if (!chatSocket || !isChatConnected) return
 
-      socket.emit('chat:participants:add', {
+      chatSocket.emit('chat:participants:add', {
         chatId,
         participantIds
       })
+
+      updateChatParticipantsInCache(chatId, profile?.id!, false)
     },
-    [socket, isConnected]
+    [chatSocket, isChatConnected]
   )
 
   // Удаление участников
   const removeParticipants = useCallback(
     (chatId: string, participantIds: string[]) => {
-      if (!socket || !isConnected) return
+      if (!chatSocket || !isChatConnected) return
 
-      socket.emit('chat:participants:remove', {
+      chatSocket.emit('chat:participants:remove', {
         chatId,
         participantIds
       })
+
+      updateChatParticipantsInCache(chatId, profile?.id!, true)
     },
-    [socket, isConnected]
+    [chatSocket, isChatConnected]
   )
 
   // Присоединение к чату по ссылке
   const joinChat = useCallback(
     (chatId: string) => {
-      if (!socket || !isConnected) return
+      if (!chatSocket || !isChatConnected) return
 
-      socket.emit('chat:join', { chatId })
+      chatSocket.emit('chat:join', { chatId })
     },
-    [socket, isConnected]
+    [chatSocket, isChatConnected]
   )
 
   // Выход из чата
   const leaveChat = useCallback(
     (chatId: string) => {
-      if (!socket || !isConnected) return
+      if (!chatSocket || !isChatConnected) return
 
-      socket.emit('chat:leave', { chatId })
+      chatSocket.emit('chat:leave', { chatId })
     },
-    [socket, isConnected]
+    [chatSocket, isChatConnected]
   )
 
   useEffect(() => {
-    if (!socket || !isConnected) return
+    if (!chatSocket || !isChatConnected) return
 
     // Обработчик нового чата
     const handleNewChat = (data: {
@@ -133,21 +127,15 @@ export const useChatSocket = ({
     }) => {
       addChatToCache(data.chat)
 
-      queryClient.invalidateQueries({ queryKey: ['chats', 'list'] })
-
       onNewChat?.(data)
     }
 
     const handleChatDeleted = (data: {
       chatId: string
-      deletedBy: string
+      chat: Chat
       message: string
     }) => {
       removeChatFromCache(data.chatId)
-
-      queryClient.invalidateQueries({ queryKey: ['chats', 'list'] })
-      queryClient.removeQueries({ queryKey: ['chats', data.chatId] })
-      queryClient.removeQueries({ queryKey: ['messages', data.chatId] })
 
       onChatDeleted?.(data)
     }
@@ -161,8 +149,6 @@ export const useChatSocket = ({
     }) => {
       addChatToCache(data.chat)
 
-      queryClient.invalidateQueries({ queryKey: ['chats', 'list'] })
-
       onChatAdded?.(data)
     }
 
@@ -174,10 +160,6 @@ export const useChatSocket = ({
     }) => {
       removeChatFromCache(data.chatId)
 
-      queryClient.invalidateQueries({ queryKey: ['chats', 'list'] })
-      queryClient.removeQueries({ queryKey: ['chats', data.chatId] })
-      queryClient.removeQueries({ queryKey: ['messages', data.chatId] })
-
       onChatRemoved?.(data)
     }
 
@@ -187,7 +169,7 @@ export const useChatSocket = ({
       userId: string
       message: string
     }) => {
-      updateChatParticipantsInChache(data.chatId, data.userId, false)
+      updateChatParticipantsInCache(data.chatId, data.userId, false)
 
       onParticipantJoined?.(data)
     }
@@ -198,31 +180,31 @@ export const useChatSocket = ({
       userId: string
       message: string
     }) => {
-      updateChatParticipantsInChache(data.chatId, data.userId, true)
+      updateChatParticipantsInCache(data.chatId, data.userId, true)
 
       onParticipantLeft?.(data)
     }
 
     // Подписка на события
-    socket.on('chat:new', handleNewChat)
-    socket.on('chat:deleted', handleChatDeleted)
-    socket.on('chat:added', handleChatAdded)
-    socket.on('chat:removed', handleChatRemoved)
-    socket.on('chat:participant:joined', handleParticipantJoined)
-    socket.on('chat:participant:left', handleParticipantLeft)
+    chatSocket.on('chat:new', handleNewChat)
+    chatSocket.on('chat:deleted', handleChatDeleted)
+    chatSocket.on('chat:added', handleChatAdded)
+    chatSocket.on('chat:removed', handleChatRemoved)
+    chatSocket.on('chat:participant:joined', handleParticipantJoined)
+    chatSocket.on('chat:participant:left', handleParticipantLeft)
 
     return () => {
       // Отписка от событий
-      socket.off('chat:new', handleNewChat)
-      socket.off('chat:deleted', handleChatDeleted)
-      socket.off('chat:added', handleChatAdded)
-      socket.off('chat:removed', handleChatRemoved)
-      socket.off('chat:participant:joined', handleParticipantJoined)
-      socket.off('chat:participant:left', handleParticipantLeft)
+      chatSocket.off('chat:new', handleNewChat)
+      chatSocket.off('chat:deleted', handleChatDeleted)
+      chatSocket.off('chat:added', handleChatAdded)
+      chatSocket.off('chat:removed', handleChatRemoved)
+      chatSocket.off('chat:participant:joined', handleParticipantJoined)
+      chatSocket.off('chat:participant:left', handleParticipantLeft)
     }
   }, [
-    socket,
-    isConnected,
+    chatSocket,
+    isChatConnected,
     queryClient,
     onNewChat,
     onChatDeleted,
@@ -240,7 +222,7 @@ export const useChatSocket = ({
       removeParticipants,
       joinChat,
       leaveChat,
-      isConnected
+      isChatConnected
     }),
     [
       createChat,
@@ -249,7 +231,7 @@ export const useChatSocket = ({
       removeParticipants,
       joinChat,
       leaveChat,
-      isConnected
+      isChatConnected
     ]
   )
 }

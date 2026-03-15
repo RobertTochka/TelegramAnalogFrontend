@@ -14,8 +14,32 @@ export const useCreateChat = () => {
     mutationFn: (data: CreateChatDto) =>
       api.post<Chat>('/chats', data).then(res => res.data),
     onSuccess: newChat => {
-      queryClient.invalidateQueries({ queryKey: ['chats', 'list'] })
-      queryClient.setQueryData(['chats', 'detail', newChat.id], newChat)
+      queryClient.setQueriesData(
+        { queryKey: ['chats', 'list'] },
+        (old: any) => {
+          if (!old) return old
+
+          const firstPage = old.pages[0]
+
+          return {
+            ...old,
+            pages: [
+              {
+                ...firstPage,
+                data: [newChat, ...firstPage.data],
+                meta: {
+                  ...firstPage.meta,
+                  total: firstPage.meta.total + 1
+                }
+              },
+              ...old.pages.slice(1)
+            ]
+          }
+        }
+      )
+
+      queryClient.setQueryData(['chat', newChat.id], newChat)
+
       toast.success('Чат создан')
     },
     onError: (error: any) => {
